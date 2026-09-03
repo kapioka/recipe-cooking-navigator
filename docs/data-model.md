@@ -23,7 +23,7 @@ Recipe
 
 データ形式の互換性を表す。
 
-例：`schema_version: "1.0.0"`
+例: `schema_version: "1.0.0"`
 
 フィールド構造や意味が変わるときに更新する。
 
@@ -31,9 +31,9 @@ Recipe
 
 個別レシピの改良履歴を表す。
 
-例：`revision: 1`, `revision: 2`
+例: `revision: 1`, `revision: 2`
 
-味付けを変えたり手順を改善しても、Schema自体が同じならSchema versionは変更しない。
+味付けや手順を改善してもSchema自体が同じならSchema versionは変更しない。
 
 ## 3. Recipe document
 
@@ -47,9 +47,9 @@ ChatGPTからアプリへ渡すトップレベル文書。
 }
 ```
 
-`type`は将来別の文書種別を追加しても判別できるよう固定する。
+ChatGPTとアプリの間は、途中で人間が読むためのMarkdownや説明文を混在させず、Schemaに適合するJSONを正本とする。
 
-## 4. Recipe identity
+## 4. Recipe identity / lineage
 
 Recipeは安定した`id`を持つ。
 
@@ -57,9 +57,39 @@ Recipeは安定した`id`を持つ。
 
 新しい別料理として保存する場合は新しい`id`を使う。
 
-MVPではUUID等の一意IDを推奨するが、Schemaでは実装側が生成できる文字列IDとして扱う。
+`parent_revision`は、そのRevisionを生成するときにベースとしたRevisionを表す。
 
-## 5. Quantity
+例:
+
+```text
+Revision 1
+   ↓
+Revision 2
+   ├─ Revision 3
+   └─ Revision 4
+```
+
+Revision 4がRevision 2をベースに再調整された場合、`parent_revision: 2`とする。
+
+## 5. App-side active / latest state
+
+`latest`と`active`はRecipe JSONそのものではなく、アプリのローカル保存状態として管理する。
+
+- `latest_revision`: 最後に取り込まれた最も新しいRevision
+- `active_revision`: 次回通常表示・調理に使うRevision
+
+両者は一致しなくてもよい。
+
+例:
+
+```text
+Revision 4 = latest
+Revision 3 = active
+```
+
+ユーザーは過去Revisionを`active`へ戻せる。新しいRevisionを取り込んでも、過去Revisionは削除しない。
+
+## 6. Quantity
 
 料理では`1/2個`、`少々`、`2〜3振り`など機械値だけで表せない量がある。
 
@@ -73,7 +103,7 @@ MVPではUUID等の一意IDを推奨するが、Schemaでは実装側が生成�
 }
 ```
 
-機械値にできない場合：
+機械値にできない場合:
 
 ```json
 {
@@ -85,7 +115,7 @@ MVPではUUID等の一意IDを推奨するが、Schemaでは実装側が生成�
 
 アプリ表示では`display`を優先する。
 
-## 6. IngredientとIngredient Use
+## 7. IngredientとIngredient Use
 
 材料一覧はRecipe直下に一度定義する。
 
@@ -93,35 +123,25 @@ MVPではUUID等の一意IDを推奨するが、Schemaでは実装側が生成�
 
 これにより、材料総量と工程使用量を分離できる。
 
-例：しょうゆ大さじ2のうち、大さじ1を途中、大さじ1を仕上げで使うケースに対応できる。
-
-## 7. Overview
+## 8. Overview
 
 `overview`は調理開始前に見る全体工程。
 
 詳細手順のコピーではなく、料理全体の流れを短く表現する。
 
-## 8. Preparation
+## 9. Preparation
 
 加熱開始前に済ませられる作業を独立タスクとして保持する。
 
-MVPではチェック状態そのものはRecipe JSONへ書き戻さず、Cook Session側のUI stateとして扱ってよい。
+チェック状態そのものはRecipe JSONへ書き戻さず、Cook SessionまたはローカルUI stateとして扱える。
 
-## 9. Stage / Step
+## 10. Stage / Step
 
 Recipeは複数のStageを持てる。
 
-例：
-
-- 下準備
-- 加熱
-- 仕上げ
-
-各Stageは複数Stepを持つ。
-
 StepはCooking modeで1画面に表示できる実行単位とする。
 
-### Stepの主要情報
+主要情報:
 
 - `id`
 - `title`
@@ -136,17 +156,27 @@ StepはCooking modeで1画面に表示できる実行単位とする。
 
 `heat`や`timer_seconds`は不要な工程では省略できる。
 
-`done_when`は原則として時間以外の実状態を示す。
+## 11. Timer state
 
-## 10. Utensil
+Recipe JSONの`timer_seconds`は推奨時間を表す。実際のタイマー開始・停止・残時間はRecipe本体へ保存しない。
+
+タイマーはユーザーがボタンまたは音声で開始する。Step表示だけでは自動開始しない。
+
+## 12. Voice interaction state
+
+音声認識や読み上げのON/OFF、現在認識中かどうか等はアプリのUI / runtime stateでありRecipe JSONには含めない。
+
+Recipe側は読み上げ可能な構造化情報を保持し、アプリ側が現在Stepから読み上げ文を組み立てる。
+
+## 13. Utensil
 
 器具はRecipe直下で定義し、StepからID参照する。
 
-`reuse_note`で使い回しの流れを人間向けに説明できる。
+`reuse_note`で使い回しの流れを説明できる。
 
 器具再利用は食品安全より優先しない。
 
-## 11. Estimated difficulty
+## 14. Estimated difficulty
 
 AIがレシピ作成時に予測した難易度。
 
@@ -161,13 +191,13 @@ AIがレシピ作成時に予測した難易度。
 
 ユーザーが調理後に付ける実難易度とは別物。
 
-## 12. Cook Session
+## 15. Cook Session
 
 1回の実調理を表す。
 
 同じRecipe revisionを複数回作った場合も、Cook Sessionは毎回追加する。
 
-主な項目：
+主な項目:
 
 - session ID
 - Recipe ID / revision
@@ -176,7 +206,7 @@ AIがレシピ作成時に予測した難易度。
 - 困ったこと
 - レシピから実際に変更したこと
 
-## 13. Evaluation
+## 16. Evaluation
 
 Cook Sessionに対するユーザー評価。
 
@@ -196,7 +226,7 @@ Cook Sessionに対するユーザー評価。
 +2 かなり強い
 ```
 
-`dimension`は固定enumにしすぎず、v1では一般的な軸をenumとして用意する。
+対象例:
 
 - sweetness
 - saltiness
@@ -207,11 +237,17 @@ Cook Sessionに対するユーザー評価。
 - aroma
 - texture
 
-## 14. Next-time intent
+## 17. 一言メモ
+
+短い自由記述を、自分の記録とChatGPT改善材料として保存できるようにする。
+
+SNS共有時にそのまま公開するとは限らない。共有文は別途ユーザーが確認・編集できるようにする。
+
+## 18. Next-time intent
 
 「次回どうしたいか」は評価コメントと分離する。
 
-例：
+例:
 
 - 甘味を少し下げる
 - 旨味を一段強くする
@@ -219,13 +255,13 @@ Cook Sessionに対するユーザー評価。
 
 ChatGPTによるRevision生成時の直接的な修正要求として利用する。
 
-## 15. Preference profileとの分離
+## 19. Preference profileとの分離
 
 一回のCook Sessionで得た評価を、恒久的なユーザー嗜好へ自動昇格しない。
 
 将来Preference Profileを実装する場合も、複数の独立したCook Sessionから継続的に確認された傾向と、個別料理だけの評価を分離する。
 
-## 16. Feedback document
+## 20. Feedback document
 
 アプリからChatGPTへ戻すトップレベル文書。
 
@@ -244,12 +280,44 @@ ChatGPTによるRevision生成時の直接的な修正要求として利用す�
 
 これにより、ChatGPT側が過去会話や外部保存状態を前提とせず、Feedback document単独で修正できる。
 
-## 17. Invariants
+任意の過去Revisionから改善要求を作成できるため、Feedbackは常に選択されたRevisionのsnapshotを含める。
+
+## 21. Portable recipe / backup data
+
+将来のレシピ書き出しやバックアップでは、内部データモデルを特定クラウドサービスへ依存させない。
+
+- 単一Recipe共有: Recipe documentまたは将来定義するポータブルRecipe container
+- 全体バックアップ: Recipe、Revision履歴、Cook Session、Evaluation、active状態を含むバックアップ形式を別途定義
+
+バックアップ形式とRecipe Schemaを同一視しない。
+
+## 22. External URL
+
+SNS共有で使用する任意のレシピURLは、Recipeの正本データではない。
+
+アプリはURLを生成・ホスト・検証・維持しない。必要なら共有画面の一時入力または共有用メタデータとして扱う。
+
+## 23. Platform independence
+
+Recipe / Feedback Schemaと主要ドメインモデルはAndroid/iOS共通とする。
+
+OS固有の次の情報をRecipe JSONへ混ぜない。
+
+- Android `content://` URI
+- iOS file bookmark / security-scoped URL
+- 端末ローカルパス
+- OS固有の共有先識別子
+- 音声認識セッションID
+
+## 24. Invariants
 
 - Recipe IDとRevisionを混同しない
 - Schema versionとRecipe revisionを混同しない
+- latestとactiveを混同しない
+- 親Revisionを常に最新Revisionと仮定しない
 - AI想定難易度とユーザー実難易度を混同しない
 - 個別Evaluationを恒久Preferenceとみなさない
 - Ingredient総量とStep使用量を混同しない
-- Feedback作成時に元Recipe snapshotを欠落させない
+- Feedback作成時に選択した元Recipe snapshotを欠落させない
 - 不明Schemaを推測で取り込まない
+- OS固有データを共有Schemaの正本へ混ぜない

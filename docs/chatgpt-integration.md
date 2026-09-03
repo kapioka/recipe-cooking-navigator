@@ -2,49 +2,79 @@
 
 ## 1. 目的
 
-ChatGPTはレシピ内容の生成・改善を担当し、Recipe Cooking Navigatorは表示・進行・記録・共有を担当する。
+ChatGPTはレシピ内容の生成・改善を担当し、Recipe Cooking Navigatorは表示・進行・記録・Version管理・共有を担当する。
 
 両者の責務を分離し、アプリが自由文を解析して意味を推測することを避ける。
 
-## 2. ChatGPT → App
+## 2. Machine-to-machine first
 
-ChatGPTは`type: "recipe"`のRecipe JSONを生成する。
+ChatGPTとアプリの往復データは、途中で人間が読むことを前提にしない。
+
+- ChatGPT → App: Recipe JSON
+- App → ChatGPT: Feedback JSON
+
+人間向けMarkdown、説明文、コードフェンス、補足文章を同じpayloadへ混在させない。
+
+ユーザー向けUIでは`JSON`を前面に出さず、「ChatGPTレシピを取り込む」「ChatGPTで改善」等の表現を使う。
+
+## 3. ChatGPT → App
+
+ChatGPTは`type: "recipe"`のRecipe JSONだけを生成する。
 
 アプリ側は受信後にRecipe Schema v1で検証する。
 
-### 受信フロー
+### Android MVP受信フロー
 
 1. ChatGPTでRecipe JSONを生成
-2. Android SharesheetでRecipe Cooking Navigatorへ共有
+2. Android Sharesheetまたはファイル経由でRecipe Cooking Navigatorへ渡す
 3. アプリがJSONとしてparse
 4. `schema_version`と`type`を確認
 5. JSON Schema検証
 6. 合格した場合のみ保存
-7. 調理前画面へ表示
+7. 同一Recipe IDがあれば新Revisionとして追加
+8. 新Recipeまたは追加Versionをレシピ詳細へ表示
 
 不正JSONや未知Schemaは推測補完しない。
 
-## 3. App → ChatGPT
+### iOS将来対応
+
+iPhone版でも同一Recipe Schemaを使い、iOS固有の受け渡し方式だけをplatform layerで実装する。Recipe document自体はAndroid/iOSで変更しない。
+
+## 4. App → ChatGPT
 
 調理後にユーザーが改善を希望する場合、アプリは`type: "recipe_feedback"`のFeedback JSONを生成する。
 
 Feedback JSONには最低限次を含める。
 
-- 改善対象Recipeのsnapshot
+- 改善対象としてユーザーが選択したRecipe Revisionのsnapshot
 - Cook Session
 - Evaluation
 - 次回希望
 - Revision依頼条件
 
-Android SharesheetからChatGPTへ共有する。
+Android MVPではSharesheetからChatGPTへ共有する。MVPではOpenAI APIを直接呼ばない。
 
-MVPではOpenAI APIを直接呼ばない。
+## 5. 任意Versionからの再改善
 
-## 4. Recipe生成時のChatGPT責務
+改善元は常に最新Versionとは限らない。
+
+例:
+
+```text
+Version 2 ← 好み
+  ├─ Version 3 ← 最新だが好みではない
+  └─ Version 4 ← Version 2を再調整
+```
+
+ユーザーがVersion 2を選んで「このバージョンをChatGPTで調整」を実行した場合、Feedback JSONにはVersion 2のsnapshotを入れる。
+
+ChatGPTは新Revisionを作成し、`parent_revision`に改善元Revisionを設定する。
+
+## 6. Recipe生成時のChatGPT責務
 
 ChatGPT Project側では次を保証する。
 
-- 材料一覧を先頭付近に配置するデータを作る
+- 材料一覧を構造化する
 - 全体工程を詳細Stepとは別に生成する
 - 事前準備を独立タスクとして生成する
 - 各Stepで使用材料とそのStepで使う分量を再掲する
@@ -54,23 +84,27 @@ ChatGPT Project側では次を保証する。
 - 次工程予告を必要に応じて生成する
 - AI想定難易度1〜5と理由を付ける
 - Schemaに存在しない独自フィールドを勝手に追加しない
+- 出力payloadに人間向け前置き・後書き・Markdownを混ぜない
 
-## 5. Revision生成時のChatGPT責務
+## 7. Revision生成時のChatGPT責務
 
 Feedback JSONを受け取った場合、ChatGPTは元Recipe snapshotを基準にRevisionを作る。
 
-原則：
+原則:
 
 1. ユーザーが明示した問題を優先する
 2. `changes_made`で実際に有効だった変更を考慮する
 3. `next_time_intent`を直接的な改善要求として扱う
-4. 問題と直接関係しない良好な部分は不必要に変更しない
-5. 食品安全上必要な変更は例外として優先する
-6. Recipe IDは維持する
-7. Recipe revisionを1増やす
-8. Schema versionはSchema変更時以外増やさない
+4. 一言メモを補助Evidenceとして考慮する
+5. 問題と直接関係しない良好な部分は不必要に変更しない
+6. 食品安全上必要な変更は例外として優先する
+7. Recipe IDは維持する
+8. 新しいRecipe revisionを作る
+9. `parent_revision`は改善元Revisionを指す
+10. Schema versionはSchema変更時以外増やさない
+11. 出力はRecipe JSONだけにする
 
-## 6. 単発評価と嗜好の区別
+## 8. 単発評価と嗜好の区別
 
 Feedbackに、ある料理で「甘味 +1」と記録されていても、ユーザーが全料理で甘さ控えめを好むとは断定しない。
 
@@ -78,17 +112,16 @@ Feedbackに、ある料理で「甘味 +1」と記録されていても、ユー
 
 将来Preference Profileを使う場合は、複数回・複数料理のEvidenceを別途評価する。
 
-## 7. Recommended revision prompt behavior
-
-Feedback JSONを受け取ったChatGPTは、概念的に次の契約で処理する。
+## 9. 推奨Revision処理契約
 
 ```text
-このFeedback documentに含まれる元Recipeと実調理評価を使い、
+このFeedback documentに含まれる改善元Recipeと実調理評価を使い、
 次回希望と実際に有効だった変更を優先してRecipeを改善する。
 
 良かった部分を不必要に変更しない。
 食品安全を損なう変更は採用しない。
-Recipe IDを維持し、revisionを1増やす。
+Recipe IDを維持する。
+新しいrevisionを作り、parent_revisionには改善元revisionを設定する。
 出力は対応Recipe Schemaに適合するRecipe JSONだけにする。
 ```
 
@@ -96,7 +129,7 @@ Recipe IDを維持し、revisionを1増やす。
 
 Recipe / Feedback Schemaの正本はこのリポジトリとする。
 
-## 8. Error / fallback
+## 10. Error / fallback
 
 ### ChatGPT出力がSchema不適合
 
@@ -104,7 +137,7 @@ Recipe / Feedback Schemaの正本はこのリポジトリとする。
 
 MVPではアプリ側で自由文から自動修復しない。
 
-ユーザーは元JSONをChatGPTへ戻し、Schema適合版の再出力を依頼できる。
+ユーザーは元データをChatGPTへ戻し、Schema適合版の再出力を依頼できる。
 
 ### 未対応Schema version
 
@@ -112,18 +145,38 @@ MVPではアプリ側で自由文から自動修復しない。
 
 ### Feedback共有先にChatGPTがない
 
-Sharesheetで他のテキスト受信アプリへ送れること自体は妨げない。特定アプリへの強制依存を作らない。
+OSの共有機能で他のテキスト受信アプリへ送れること自体は妨げない。特定アプリへの強制依存を作らない。
 
-## 9. Security / privacy
+## 11. SNS共有との分離
+
+ChatGPT連携用JSONとSNS投稿用文章は別の成果物とする。
+
+SNS共有時はアプリが人間向け投稿文を生成し、ユーザーが確認・編集してからOSの共有機能へ渡す。
+
+SNS投稿文へ含められる候補:
+
+- 料理名
+- アプリを使ったこと
+- 総合評価
+- 実難易度
+- 味評価 / 好み
+- 公開用一言メモ
+- ユーザーが自分で取得・入力したレシピURL
+
+アプリはそのURLを生成、ホスト、検証、維持しない。
+
+## 12. Security / privacy
 
 - APIキーをRecipe JSONへ含めない
 - アカウントIDや認証情報をFeedbackへ含めない
 - 端末ローカルパスを共有文書へ含めない
+- Android/iOS固有のローカルURIを共有Schemaへ含めない
 - Cook history全体を自動送信しない
 - ユーザーが改善を依頼した対象Sessionに必要な情報だけ共有する
+- 自分用一言メモをSNSへ自動公開しない
 
-## 10. 将来のAPI連携
+## 13. 将来のAPI連携
 
-OpenAI API直接統合はMVP外。
+OpenAI API直接統合はAndroid MVP外。
 
 将来導入する場合も、現在のRecipe / Feedback JSON契約を維持し、UIや保存モデルをAPI固有仕様へ直接結合しないことを優先する。
