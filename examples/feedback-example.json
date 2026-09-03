@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0.0",
+  "type": "recipe_feedback",
+  "recipe_snapshot": {
+    "schema_version": "1.0.0",
+    "type": "recipe",
+    "recipe": {
+      "id": "ginger-pork-001",
+      "revision": 1,
+      "parent_revision": null,
+      "title": "豚の生姜焼き",
+      "servings": 2,
+      "total_time_minutes": 20,
+      "estimated_difficulty": {"score":2,"reason":"フライパン1つで完結し、加熱判断が比較的単純"},
+      "ingredients": [
+        {"id":"pork","name":"豚こま切れ肉","quantity":{"value":200,"unit":"g","display":"200g"}},
+        {"id":"onion","name":"玉ねぎ","quantity":{"value":0.5,"unit":"個","display":"1/2個"}},
+        {"id":"oil","name":"サラダ油","quantity":{"value":1,"unit":"小さじ","display":"小さじ1"}},
+        {"id":"soy","name":"しょうゆ","quantity":{"value":1.5,"unit":"大さじ","display":"大さじ1と1/2"}},
+        {"id":"mirin","name":"みりん","quantity":{"value":1,"unit":"大さじ","display":"大さじ1"}},
+        {"id":"sake","name":"酒","quantity":{"value":1,"unit":"大さじ","display":"大さじ1"}},
+        {"id":"ginger","name":"おろし生姜","quantity":{"value":15,"unit":"g","display":"15g"}}
+      ],
+      "overview": ["玉ねぎを切り、豚肉と調味料を準備する","生姜だれを混ぜる","玉ねぎを炒める","同じフライパンで豚肉を焼く","生姜だれを加えて煮絡める"],
+      "utensils": [
+        {"id":"pan","name":"フライパン","quantity":1,"reuse_note":"玉ねぎ、豚肉、仕上げまで同じものを使用"},
+        {"id":"bowl","name":"小ボウル","quantity":1,"reuse_note":"生姜だれ用"}
+      ],
+      "preparation": [
+        {"id":"prep-onion","text":"玉ねぎ1/2個を薄切りにする","ingredient_uses":[{"ingredient_id":"onion","quantity":{"value":0.5,"unit":"個","display":"1/2個"}}]},
+        {"id":"prep-sauce","text":"しょうゆ大さじ1と1/2、みりん大さじ1、酒大さじ1、おろし生姜15gを小ボウルで混ぜる","ingredient_uses":[
+          {"ingredient_id":"soy","quantity":{"value":1.5,"unit":"大さじ","display":"大さじ1と1/2"}},
+          {"ingredient_id":"mirin","quantity":{"value":1,"unit":"大さじ","display":"大さじ1"}},
+          {"ingredient_id":"sake","quantity":{"value":1,"unit":"大さじ","display":"大さじ1"}},
+          {"ingredient_id":"ginger","quantity":{"value":15,"unit":"g","display":"15g"}}
+        ]}
+      ],
+      "stages": [{
+        "id":"stage-heat","title":"加熱","steps":[
+          {"id":"step-onion","title":"玉ねぎを炒める","instruction":"フライパンにサラダ油小さじ1を入れ、玉ねぎ1/2個を中火で炒める。","ingredient_uses":[
+            {"ingredient_id":"oil","quantity":{"value":1,"unit":"小さじ","display":"小さじ1"}},
+            {"ingredient_id":"onion","quantity":{"value":0.5,"unit":"個","display":"1/2個"}}
+          ],"heat":"中火","timer_seconds":120,"done_when":"玉ねぎが少し透き通る","utensil_ids":["pan"],"parallel_tasks":["盛り付け皿を準備する"],"next_preview":"玉ねぎを端へ寄せ、同じフライパンで豚肉200gを焼く。"},
+          {"id":"step-pork","title":"豚肉を焼く","instruction":"玉ねぎを端へ寄せ、豚こま切れ肉200gを広げて焼く。","ingredient_uses":[{"ingredient_id":"pork","quantity":{"value":200,"unit":"g","display":"200g"}}],"heat":"中火","timer_seconds":180,"done_when":"豚肉の赤い部分がなくなる","utensil_ids":["pan"],"parallel_tasks":[],"next_preview":"混ぜておいた生姜だれを加えて煮絡める。"},
+          {"id":"step-sauce","title":"生姜だれを煮絡める","instruction":"生姜だれ（しょうゆ大さじ1と1/2、みりん大さじ1、酒大さじ1、おろし生姜15g）を加え、全体に絡める。","ingredient_uses":[
+            {"ingredient_id":"soy","quantity":{"value":1.5,"unit":"大さじ","display":"大さじ1と1/2"}},
+            {"ingredient_id":"mirin","quantity":{"value":1,"unit":"大さじ","display":"大さじ1"}},
+            {"ingredient_id":"sake","quantity":{"value":1,"unit":"大さじ","display":"大さじ1"}},
+            {"ingredient_id":"ginger","quantity":{"value":15,"unit":"g","display":"15g"}}
+          ],"heat":"中火","timer_seconds":90,"done_when":"たれの水分が少し減り、肉と玉ねぎに照りが出る","utensil_ids":["pan"],"parallel_tasks":[],"next_preview":"火を止めて盛り付ける。"}
+        ]
+      }],
+      "adjustments":[
+        {"condition":"味が薄い","action":"しょうゆ小さじ1/2ずつ追加する"},
+        {"condition":"生姜の香りが弱い","action":"おろし生姜を2〜3gずつ追加する"}
+      ],
+      "storage_note":"保存する場合は粗熱を取り、冷蔵する。",
+      "lunchbox_note":"弁当に入れる場合は汁気を飛ばし、十分に冷ましてから詰める。",
+      "revision_summary":[]
+    }
+  },
+  "cook_session": {
+    "id":"session-2026-09-04-001",
+    "recipe_id":"ginger-pork-001",
+    "recipe_revision":1,
+    "cooked_at":"2026-09-04T19:10:00+09:00",
+    "actual_time_minutes":24,
+    "difficulty":{"score":3,"comment":"肉を焼く前にたれを作っておけばもっと余裕があった"},
+    "issues":["豚肉を焼いている途中で盛り付け皿を出したため少し忙しかった"],
+    "changes_made":[{"description":"仕上げに味の素を2振り追加した","result":"旨味が増して好みに近づいた"}]
+  },
+  "evaluation": {
+    "overall":4,
+    "taste":[
+      {"dimension":"sweetness","deviation":1,"comment":"少し甘さが残った"},
+      {"dimension":"saltiness","deviation":0,"comment":"ちょうどよい"},
+      {"dimension":"umami","deviation":-1,"comment":"追加調整前は少し弱かった"},
+      {"dimension":"aroma","deviation":-1,"comment":"生姜の香りをもう少し感じたい"}
+    ],
+    "comment":"全体として食べやすい。甘味を少し下げ、旨味と生姜の香りを少し強くしたい。",
+    "next_time_intent":["甘味を少し下げる","旨味を一段強くする","生姜の香りを少し強くする","盛り付け皿は加熱前に準備する"]
+  },
+  "revision_request": {
+    "preserve_successful_parts":true,
+    "goal":"今回の評価を反映して次回用のRevision 2を作る",
+    "notes":"食品安全と調理の簡単さは維持する"
+  }
+}

@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kapioka/recipe-cooking-navigator/schemas/feedback-v1.schema.json",
+  "title": "Recipe Cooking Navigator Feedback v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "type",
+    "recipe_snapshot",
+    "cook_session",
+    "evaluation",
+    "revision_request"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "type": {
+      "const": "recipe_feedback"
+    },
+    "recipe_snapshot": {
+      "$ref": "recipe-v1.schema.json"
+    },
+    "cook_session": {
+      "$ref": "#/$defs/cookSession"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/evaluation"
+    },
+    "revision_request": {
+      "$ref": "#/$defs/revisionRequest"
+    }
+  },
+  "$defs": {
+    "difficulty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "comment"
+      ],
+      "properties": {
+        "score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "comment": {
+          "type": "string"
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "description"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string"
+        }
+      }
+    },
+    "cookSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "recipe_id",
+        "recipe_revision",
+        "actual_time_minutes",
+        "difficulty",
+        "issues",
+        "changes_made"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipe_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipe_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cooked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actual_time_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "difficulty": {
+          "$ref": "#/$defs/difficulty"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "changes_made": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/change"
+          }
+        }
+      }
+    },
+    "tasteRating": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimension",
+        "deviation",
+        "comment"
+      ],
+      "properties": {
+        "dimension": {
+          "type": "string",
+          "enum": [
+            "sweetness",
+            "saltiness",
+            "umami",
+            "spiciness",
+            "acidity",
+            "richness",
+            "aroma",
+            "texture"
+          ]
+        },
+        "deviation": {
+          "type": "integer",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "comment": {
+          "type": "string"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overall",
+        "taste",
+        "comment",
+        "next_time_intent"
+      ],
+      "properties": {
+        "overall": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "taste": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tasteRating"
+          }
+        },
+        "comment": {
+          "type": "string"
+        },
+        "next_time_intent": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "revisionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preserve_successful_parts",
+        "goal"
+      ],
+      "properties": {
+        "preserve_successful_parts": {
+          "type": "boolean"
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
