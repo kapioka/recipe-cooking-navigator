@@ -65,22 +65,20 @@ OS固有識別子やローカルURIをRecipe / Feedback Schemaへ混ぜない。
 
 ## 5. 実装技術
 
-クロスプラットフォーム技術を優先候補とするが、現時点では最終決定しない。
+Android MVPの実装技術はFlutterとする。
 
-候補例:
+Androidのapplication IDは`com.kapioka.recipe_cooking_navigator`とする。
 
-- Flutter
-- その他、Android/iOS共通ロジックを保ちつつ音声・ファイル・共有のネイティブ連携が可能な構成
+当面はAndroidだけを対象に実装する。将来iPhone版へ進む場合に主要ロジックを再利用できるよう、Recipe / Feedback / Version / Cook Session / EvaluationなどのOS非依存ロジックはDartのドメイン層へ置き、音声認識、TTS、ファイル、共有、画面常時点灯などのOS連携から分離する。
 
-技術選定時の優先条件:
+Flutterの採用はiOS実装の開始を意味しない。Android版の完成と実利用評価までは、iOS UI、iOS固有機能、iOS向けCIを追加しない。
 
-1. Androidで先行開発しやすい
-2. Recipe / Feedback / Version管理ロジックをiOSでも再利用しやすい
-3. 音声認識とTTSへ安定してアクセスできる
-4. OS共有機能とファイルI/Oを扱える
-5. 画面常時点灯を制御できる
-6. 特定クラウドやバックエンドを必須にしない
-7. 将来の保守負担が過大にならない
+選定理由:
+
+1. Androidで先行開発できる
+2. Recipe / Feedback / Version管理ロジックを将来iOSでも再利用しやすい
+3. 音声認識、TTS、OS共有、ファイルI/O、画面常時点灯をplatform layer経由で扱える
+4. 特定クラウドやバックエンドを必須にしない
 
 ## 6. Android完成までiOSでやらないこと
 

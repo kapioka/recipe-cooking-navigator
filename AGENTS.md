@@ -29,11 +29,20 @@ Schemaの構造・意味については`schemas/*.schema.json`を正本としま
 
 ## 3. Current implementation status
 
-現在は仕様策定段階で、アプリ実装は未開始です。
+FlutterによるAndroidプロジェクト初期化が完了し、Phase 1の実装開始段階です。
 
-実装技術はまだ正式決定していません。`docs/platform-strategy.md`ではクロスプラットフォーム技術を優先候補としていますが、タスクで明示されるまではFlutter等のフレームワークを勝手に確定・初期化しないでください。
+実装技術はFlutterに正式決定しています。当面はAndroidだけを実装し、OS非依存のドメインロジックとAndroid固有連携を分離してください。iOS UIやiOS固有機能は明示的な将来タスクまで追加しないでください。
 
-フレームワーク決定後は、この`AGENTS.md`へ実際のbuild / test / lintコマンドを追記してください。存在しないコマンドや未導入ツールを仮定しないでください。
+リポジトリ直下で使用する基本コマンド:
+
+- format確認: `dart format --output=none --set-exit-if-changed lib test`
+- static analysis / lint: `pwsh -File .\tool\flutterw.ps1 analyze`
+- unit / widget tests: `pwsh -File .\tool\flutterw.ps1 test`
+- Android debug build: `pwsh -File .\tool\flutterw.ps1 build apk --debug`
+
+Windowsでは親パス`E:\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介してASCIIパスのjunctionから実行してください。junctionは同じリポジトリを指すだけで、ソースを複製しません。
+
+新しい検証ツールやコマンドを追加する場合は、実際に導入・実行できることを確認してからこのファイルへ追記してください。
 
 ## 4. Core product invariants
 
