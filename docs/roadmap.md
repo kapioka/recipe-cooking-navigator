@@ -4,7 +4,7 @@
 
 ## Current status
 
-実装技術はFlutterに決定済み。Androidプロジェクト初期化が完了し、Phase 1の機能実装を開始できる状態。
+実装技術はFlutterに決定済み。Androidプロジェクト初期化に加え、ファイルからのRecipe取り込み、Schema検証、端末内保存、レシピ一覧・基本詳細まで実装済み。
 
 方針:
 
@@ -48,7 +48,7 @@
 - [ ] 評価画面の入力項目と省略可能項目を確定
 - [ ] SNS共有プレビュー画面を確定
 - [ ] ポータブルRecipeファイルの拡張子・MIME type・内容を決定
-- [ ] ローカルDB/永続化方式を決定
+- [x] 当面の永続化方式をアプリ内のversion付きJSONファイルに決定（将来のDB移行余地は保持）
 - [ ] iOS将来対応を考慮した共通化方針を実装技術へ反映
 - [ ] ライセンスを決定
 
@@ -57,32 +57,32 @@
 ### App shell / home
 
 - [x] Androidプロジェクト初期化
-- [ ] ホーム = レシピ一覧
-- [ ] 「ChatGPTレシピを取り込む」を目立つ位置へ配置
-- [ ] レシピ詳細画面
-- [ ] 基本ナビゲーション
+- [x] ホーム = レシピ一覧
+- [x] 「ChatGPTレシピを取り込む」を目立つ位置へ配置
+- [x] レシピ詳細画面
+- [x] 基本ナビゲーション
 
 ### Import / validation / storage
 
 - [ ] Android SharesheetからRecipeを受信
-- [ ] ファイルからRecipeを読み込み
-- [ ] Recipe Schema validation
-- [ ] 不正データをfail-closedで拒否
-- [ ] ローカル保存
-- [ ] Recipe ID単位のVersion履歴保存
-- [ ] latest Revision管理
+- [x] ファイルからRecipeを読み込み
+- [x] Recipe Schema validation
+- [x] 不正データをfail-closedで拒否
+- [x] ローカル保存
+- [x] Recipe ID単位のVersion履歴保存
+- [x] latest Revision管理
 - [ ] active Revision管理
 - [ ] 過去Versionをactiveへ戻す
-- [ ] 同一Revision重複importの扱いを決定・実装
+- [x] 同一Revision重複importの扱いを決定・実装（同一内容はno-op、異なる内容は拒否）
 
 ### Pre-cook view
 
-- [ ] 材料一覧
-- [ ] 全体工程
+- [x] 材料一覧
+- [x] 全体工程
 - [ ] 器具一覧 / 使い回しメモ
 - [ ] 事前準備チェック
-- [ ] 想定調理時間
-- [ ] AI想定難易度
+- [x] 想定調理時間
+- [x] AI想定難易度
 - [ ] active Version表示
 
 ### Cooking mode

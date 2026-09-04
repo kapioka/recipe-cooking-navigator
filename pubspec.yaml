@@ -7,8 +7,12 @@ environment:
   sdk: ^3.13.2
 
 dependencies:
+  collection: ^1.19.1
+  file_selector: ^1.1.0
   flutter:
     sdk: flutter
+  json_schema: ^5.2.2
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -17,3 +21,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - schemas/recipe-v1.schema.json
