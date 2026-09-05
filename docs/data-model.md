@@ -206,6 +206,22 @@ AIがレシピ作成時に予測した難易度。
 - 困ったこと
 - レシピから実際に変更したこと
 
+### 調理途中のローカル進行状態との分離
+
+調理位置の再開用に、完了後の評価とは別の`CookingProgress`を端末内で保持する。内部保存形式の設計項目であり、Recipe / Feedback JSON Schemaへの追加ではない。
+
+- Recipe ID、固定したrevision、現在のStep ID、更新時刻を保持する
+- 画面上の工程番号は、そのrevisionのStep順序から算出する
+- 初期版はRecipe IDごとに再開対象を1件保持する。同時に複数料理を管理する設計へ広げない
+- 位置変更時に保存し、起動時には参照先revisionとStepの存在を検証する
+- Recipe importやactive切替は、既存の進行状態が参照するrevisionを書き換えない
+- 現在位置は閲覧・操作位置であり、工程の作業完了状態やEvaluationではない
+- 「最初から」は進行状態だけを更新し、過去のCook SessionやRecipeを削除しない
+- 調理完了時はCook Session保存の成功を確認してから進行中表示を終了する
+- タイマーの実行状態・復元は別責務とし、Stepの位置だけから開始・完了を推定しない
+
+UI上の再開・欠損時の扱いは[cooking-mode-ui.md](cooking-mode-ui.md)を参照する。
+
 ## 16. Evaluation
 
 Cook Sessionに対するユーザー評価。
@@ -321,3 +337,29 @@ OS固有の次の情報をRecipe JSONへ混ぜない。
 - Feedback作成時に選択した元Recipe snapshotを欠落させない
 - 不明Schemaを推測で取り込まない
 - OS固有データを共有Schemaの正本へ混ぜない
+
+## 25. Local Recipe Metadata / User Tags
+
+ユーザーがアプリ内でレシピを整理する情報は、ChatGPTが生成するRecipe documentと分離し、端末内の`RecipeLocalMetadata`として管理する。
+
+初期対象はユーザータグとする。
+
+```text
+RecipeLocalMetadata
+ ├─ recipe_id
+ └─ tags（最大5個）
+```
+
+- `recipe_id`でRecipeへ紐づける
+- 特定Revisionへは紐づけず、同じRecipe IDの全Revisionで共有する
+- タグの追加、編集、削除はRecipe revisionを増やさない
+- Recipe JSON / Feedback JSONのSchemaへは含めない
+- Recipe importで上書きしない
+- Feedbackや外部共有へ自動的に含めない
+- 空文字と正規化後の重複を保存しない
+
+タグの表示文字列はユーザー入力を基本とする。検索用には別途、前後空白の除去、Unicode NFKC相当の全角・半角正規化、英字の小文字化を行った比較値を使用できる。
+
+ホーム検索では、通常表示に使うRevision（`active_revision`があればactive、未設定なら`latest_revision`）の料理名と食材名、およびRecipe IDに紐づくタグを検索対象とする。いずれかが検索語と部分一致すればRecipe単位で結果へ含める。
+
+検索インデックスを将来追加する場合も、正本はRecipe Revisionと`RecipeLocalMetadata`に置き、インデックスを正本データとして扱わない。
