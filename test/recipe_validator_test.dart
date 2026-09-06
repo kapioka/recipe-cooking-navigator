@@ -84,4 +84,41 @@ void main() {
       ),
     );
   });
+
+  test('rejects duplicate IDs and dangling references', () {
+    final duplicateStage =
+        jsonDecode(validRecipeSource) as Map<String, dynamic>;
+    final recipe = duplicateStage['recipe'] as Map<String, dynamic>;
+    final stages = recipe['stages'] as List;
+    stages.add(jsonDecode(jsonEncode(stages.first)));
+
+    expect(
+      () => validator.validateDocument(duplicateStage),
+      throwsA(isA<RecipeImportException>()),
+    );
+
+    final danglingUtensil =
+        jsonDecode(validRecipeSource) as Map<String, dynamic>;
+    final danglingRecipe = danglingUtensil['recipe'] as Map<String, dynamic>;
+    final firstStage = (danglingRecipe['stages'] as List).first as Map;
+    final firstStep = (firstStage['steps'] as List).first as Map;
+    (firstStep['utensil_ids'] as List).add('missing-utensil');
+
+    expect(
+      () => validator.validateDocument(danglingUtensil),
+      throwsA(isA<RecipeImportException>()),
+    );
+  });
+
+  test('rejects a parent revision that is not older', () {
+    final document = jsonDecode(validRecipeSource) as Map<String, dynamic>;
+    final recipe = document['recipe'] as Map<String, dynamic>;
+    recipe['revision'] = 2;
+    recipe['parent_revision'] = 2;
+
+    expect(
+      () => validator.validateDocument(document),
+      throwsA(isA<RecipeImportException>()),
+    );
+  });
 }

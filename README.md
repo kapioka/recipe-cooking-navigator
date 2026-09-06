@@ -1,8 +1,10 @@
 # Recipe Cooking Navigator
 
-ChatGPTなどで生成した構造化レシピをスマートフォンへ取り込み、調理前の全体把握、ハンズフリー調理、調理後評価、ChatGPTによる再改善までを一続きで支援する公開プロジェクトです。
+ChatGPTなどで生成した構造化レシピをスマートフォンへ取り込み、調理前の全体把握、ハンズフリー調理、調理後評価、ChatGPTによる再改善までを一続きで支援することを目指す公開プロジェクトです。
 
-> Status: specification-first / Android implementation not started
+> Status: Android initial version (`0.1.0`) / レシピのファイル取り込みから調理完了まで実装済み
+
+ChatGPT側で対応Recipeを生成するための公開Packageは、[Recipe Cooking Navigator — ChatGPT Project Package](https://github.com/kapioka/ai-prompt-library/tree/main/prompts/food-drink/recipe-cooking-navigator)で配布しています。
 
 ## 目的
 
@@ -62,6 +64,7 @@ ChatGPTへ共有
 - [ChatGPT連携](docs/chatgpt-integration.md)
 - [プラットフォーム方針](docs/platform-strategy.md)
 - [ロードマップ / ToDo](docs/roadmap.md)
+- [ChatGPT Project Package](https://github.com/kapioka/ai-prompt-library/tree/main/prompts/food-drink/recipe-cooking-navigator)
 
 ## JSON Schema
 
@@ -73,22 +76,20 @@ ChatGPTへ共有
 - [Recipe JSON例](examples/recipe-example.json)
 - [Feedback JSON例](examples/feedback-example.json)
 
-## Android MVP
+## Android初期版
 
-初期実用版では次を優先します。
+現在の初期版は、レシピを取り込んでから調理を完了するまでの主要フローを実装しています。
 
-1. ホームをレシピ一覧にし、「ChatGPTレシピを取り込む」を目立つ位置に置く
-2. Recipe JSONの共有受信・ファイル読み込み・Schema検証
-3. ローカル保存とRecipe Version履歴
-4. 使用中Versionと最新Versionを分離して管理
-5. 材料・全体工程・器具・事前準備の表示
-6. 1工程ずつの調理モード
-7. 音声操作と現在工程の読み上げ
-8. ユーザー起動タイマー
-9. 調理中の画面常時点灯
-10. 調理後評価と一言メモ
-11. Feedback JSONを生成しChatGPTへ戻す
-12. 修正版を新Versionとして取り込み、過去Versionへ戻せる
+- Recipeファイルの取り込み、Schema検証、fail-closedでの拒否
+- 端末内保存と同一Recipeの複数Revision保持
+- レシピ一覧、料理名・食材・タグ検索、ローカルタグ編集
+- 材料、器具、事前準備、全体工程の確認
+- 1工程ずつのCooking mode、工程一覧、中断位置の保存・再開
+- 音声操作、現在工程の読み上げ、ユーザー起動タイマー
+- Cooking mode中の画面常時点灯と終了時の解除
+- 調理完了時の最小Cook Session記録
+
+次の主要バージョンでは、Android Sharesheet受信、`active` Revision管理、事前準備のチェック、調理後評価、Feedback JSON共有、過去Versionからの改善ループを追加します。詳細は[ロードマップ](docs/roadmap.md)を参照してください。
 
 ## 共有方針
 
@@ -162,7 +163,20 @@ Recipe Cooking Navigatorは以下を行いません。
 
 ## 現在の状態
 
-現在は仕様策定段階です。Androidアプリコード、CI、クラウド機能、iOSコードはまだ追加していません。
+FlutterによるAndroid初期版を実装済みです。Pixel 10aでファイル取り込み、保存データを維持した更新、Cooking mode、TTS、音声操作、タイマー、中断・再開を確認しています。
+
+調理後評価、Feedback JSON共有、`active` Revision切り替え、SNS共有、バックアップ、iOS版は未実装です。また、調理雑音下での音声認識精度は引き続き実機検証が必要です。
+
+## 開発・検証
+
+Windowsでは、Android Gradle Pluginが親パスの非ASCII文字を拒否するため、リポジトリ付属の`tool/flutterw.ps1`を使用します。
+
+```powershell
+dart format --output=none --set-exit-if-changed lib test
+pwsh -File .\tool\flutterw.ps1 analyze
+pwsh -File .\tool\flutterw.ps1 test
+pwsh -File .\tool\flutterw.ps1 build apk --debug
+```
 
 ## ライセンス
 

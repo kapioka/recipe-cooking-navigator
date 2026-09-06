@@ -94,6 +94,39 @@ class RecipeValidator {
       );
     }
 
+    final recipe = document['recipe'] as Map<String, dynamic>;
+    final ingredients = recipe['ingredients'] as List;
+    final utensils = recipe['utensils'] as List;
+    final preparation = recipe['preparation'] as List;
+    final stages = recipe['stages'] as List;
+    final steps = [for (final stage in stages) ...stage['steps'] as List];
+    bool uniqueIds(List items) =>
+        items.map((e) => e['id']).toSet().length == items.length;
+    final ingredientIds = ingredients.map((e) => e['id']).toSet();
+    final utensilIds = utensils.map((e) => e['id']).toSet();
+    final uses = [
+      for (final step in steps) ...step['ingredient_uses'] as List,
+      for (final prep in preparation) ...?prep['ingredient_uses'] as List?,
+    ];
+    final parentRevision = recipe['parent_revision'] as int?;
+    if (parentRevision != null &&
+            parentRevision >= (recipe['revision'] as int) ||
+        !uniqueIds(ingredients) ||
+        !uniqueIds(utensils) ||
+        !uniqueIds(preparation) ||
+        !uniqueIds(stages) ||
+        !uniqueIds(steps) ||
+        uses.any((use) => !ingredientIds.contains(use['ingredient_id'])) ||
+        steps.any(
+          (step) => (step['utensil_ids'] as List).any(
+            (id) => !utensilIds.contains(id),
+          ),
+        )) {
+      throw const RecipeImportException(
+        RecipeImportErrorCode.schemaViolation,
+        '履歴または材料・器具・事前準備・工程のIDか参照が正しくありません。',
+      );
+    }
     return RecipeDocument.fromValidatedJson(document);
   }
 }

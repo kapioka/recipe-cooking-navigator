@@ -4,10 +4,31 @@ import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
 import 'recipe_detail_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.controller, super.key});
 
   final RecipeLibraryController controller;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final TextEditingController _searchController;
+
+  RecipeLibraryController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: controller.searchQuery);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +42,33 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: TextField(
+                    key: const Key('recipe_search_field'),
+                    controller: _searchController,
+                    onChanged: controller.setSearchQuery,
+                    decoration: InputDecoration(
+                      hintText: '料理名・食材・タグで検索',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: controller.searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              key: const Key('clear_recipe_search'),
+                              tooltip: '検索をクリア',
+                              onPressed: _clearSearch,
+                              icon: const Icon(Icons.clear),
+                            ),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                if (controller.searchSuggestions.isNotEmpty)
+                  _SuggestionList(
+                    suggestions: controller.searchSuggestions,
+                    onSelected: _selectSuggestion,
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: FilledButton.icon(
                     key: const Key('import_recipe_button'),
                     onPressed: controller.isImporting
@@ -50,8 +97,10 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 Expanded(
-                  child: controller.recipes.isEmpty
+                  child: controller.totalRecipeCount == 0
                       ? const _EmptyLibrary()
+                      : controller.recipes.isEmpty
+                      ? _NoSearchResults(query: controller.searchQuery)
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                           itemCount: controller.recipes.length,
@@ -59,6 +108,10 @@ class HomeScreen extends StatelessWidget {
                           itemBuilder: (context, index) {
                             return _RecipeCard(
                               recipe: controller.recipes[index],
+                              tags: controller.tagsFor(
+                                controller.recipes[index].id,
+                              ),
+                              controller: controller,
                             );
                           },
                         ),
@@ -69,6 +122,20 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    controller.setSearchQuery('');
+  }
+
+  void _selectSuggestion(RecipeSearchSuggestion suggestion) {
+    _searchController.text = suggestion.label;
+    _searchController.selection = TextSelection.collapsed(
+      offset: suggestion.label.length,
+    );
+    controller.setSearchQuery(suggestion.label);
+    FocusScope.of(context).unfocus();
   }
 
   Future<void> _importRecipe(BuildContext context) async {
@@ -86,6 +153,56 @@ class HomeScreen extends StatelessWidget {
             : null,
       ),
     );
+  }
+}
+
+class _SuggestionList extends StatelessWidget {
+  const _SuggestionList({required this.suggestions, required this.onSelected});
+
+  final List<RecipeSearchSuggestion> suggestions;
+  final ValueChanged<RecipeSearchSuggestion> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 220),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: suggestions.length,
+            itemBuilder: (context, index) {
+              final suggestion = suggestions[index];
+              return ListTile(
+                dense: true,
+                leading: Icon(_suggestionIcon(suggestion.kind)),
+                title: Text(suggestion.label),
+                trailing: Text(_suggestionKindLabel(suggestion.kind)),
+                onTap: () => onSelected(suggestion),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _suggestionIcon(RecipeSearchSuggestionKind kind) {
+    return switch (kind) {
+      RecipeSearchSuggestionKind.recipeTitle => Icons.menu_book_outlined,
+      RecipeSearchSuggestionKind.ingredient => Icons.restaurant_outlined,
+      RecipeSearchSuggestionKind.tag => Icons.sell_outlined,
+    };
+  }
+
+  String _suggestionKindLabel(RecipeSearchSuggestionKind kind) {
+    return switch (kind) {
+      RecipeSearchSuggestionKind.recipeTitle => '料理名',
+      RecipeSearchSuggestionKind.ingredient => '食材',
+      RecipeSearchSuggestionKind.tag => 'タグ',
+    };
   }
 }
 
@@ -119,10 +236,43 @@ class _EmptyLibrary extends StatelessWidget {
   }
 }
 
+class _NoSearchResults extends StatelessWidget {
+  const _NoSearchResults({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.search_off,
+              size: 48,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 12),
+            Text('「$query」に一致するレシピはありません'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({required this.recipe});
+  const _RecipeCard({
+    required this.recipe,
+    required this.tags,
+    required this.controller,
+  });
 
   final RecipeDocument recipe;
+  final List<String> tags;
+  final RecipeLibraryController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -136,16 +286,37 @@ class _RecipeCard extends StatelessWidget {
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            '${recipe.servings}人分 ・ ${recipe.totalTimeMinutes}分 ・ '
-            '難易度${recipe.estimatedDifficulty} ・ Version ${recipe.revision}',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${recipe.servings}人分 ・ ${recipe.totalTimeMinutes}分 ・ '
+                '難易度${recipe.estimatedDifficulty} ・ Version ${recipe.revision}',
+              ),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: tags
+                      .map(
+                        (tag) => Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(tag),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+            ],
           ),
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => RecipeDetailScreen(recipe: recipe),
+              builder: (_) =>
+                  RecipeDetailScreen(recipe: recipe, controller: controller),
             ),
           );
         },

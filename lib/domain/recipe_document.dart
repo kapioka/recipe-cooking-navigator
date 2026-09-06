@@ -53,6 +53,19 @@ class RecipeDocument {
   final List<RecipeIngredient> ingredients;
   final List<String> overview;
 
+  Map<String, dynamic> get recipeData => raw['recipe'] as Map<String, dynamic>;
+
+  List<Map<String, dynamic>> get steps => [
+    for (final stage in recipeData['stages'] as List)
+      for (final step in stage['steps'] as List)
+        Map<String, dynamic>.from(step as Map),
+  ];
+
+  List<String> ingredientsFor(Map<String, dynamic> step) => [
+    for (final use in step['ingredient_uses'] as List)
+      '${(recipeData['ingredients'] as List).firstWhere((item) => item['id'] == use['ingredient_id'])['name']} ${use['quantity']['display']}${use['note'] == null ? '' : '（${use['note']}）'}',
+  ];
+
   static Map<String, dynamic> _copyJson(Map<String, dynamic> value) {
     return jsonDecode(jsonEncode(value)) as Map<String, dynamic>;
   }
