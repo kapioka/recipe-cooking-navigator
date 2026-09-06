@@ -1,0 +1,28 @@
+name: recipe_cooking_navigator
+description: "Android-first cooking navigation app for structured ChatGPT recipes."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  collection: ^1.19.1
+  file_selector: ^1.1.0
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  json_schema: ^5.2.2
+  path_provider: ^2.1.6
+  unorm_dart: ^0.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - schemas/recipe-v1.schema.json
