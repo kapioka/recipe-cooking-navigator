@@ -8,7 +8,7 @@
 
 2026-09-06: 自動テスト26件、formatter、static analysis、Android debug buildが成功。Pixel 10a（Android 17 / API 37）へ更新し、既存Recipeデータ、文字サイズ、画面回転設定を保持したまま、検索、調理操作、途中再開、読み上げ、音声操作受付、タイマー調整・リセット、調理完了を確認した。タグ編集・再起動後の永続化、調理雑音下の実声認識、TalkBackは実機未検証。
 
-2026-09-07: 専用のrelease署名鍵と、debug鍵へfallbackしないbuild・検証手順を整備し、署名済み`0.1.0 (1)` APKを生成・検証した。一般公開には、鍵の復旧バックアップ、ライセンス決定、専用署名APKの実機検証、tag・GitHub Release公開が残っている。
+2026-09-07: 専用のrelease署名鍵と、debug鍵へfallbackしないbuild・検証手順を整備し、署名済み`0.1.0 (1)` APKを生成・検証した。鍵の復旧情報をバックアップし、Apache License 2.0、NOTICE、食品安全上の注意を採用した。一般公開には、専用署名APKの実機検証、tag・GitHub Release公開が残っている。
 
 ### Initial public version scope
 
@@ -63,7 +63,7 @@
 - [ ] ポータブルRecipeファイルの拡張子・MIME type・内容を決定
 - [x] 当面の永続化方式をアプリ内のversion付きJSONファイルに決定（将来のDB移行余地は保持）
 - [x] OS非依存ドメインとAndroid固有連携を分離
-- [ ] ライセンスを決定
+- [x] Apache License 2.0、NOTICE、食品安全上の注意を採用
 
 ## Phase 1 — Android core MVP
 

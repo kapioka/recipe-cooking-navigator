@@ -68,6 +68,30 @@ void main() {
     expect(find.text('全体工程'), findsOneWidget);
   });
 
+  testWidgets('shows attribution and food safety notice', (tester) async {
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore(),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => null,
+    );
+    await controller.load();
+
+    await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+    await tester.tap(find.byKey(const Key('app_information_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('このアプリについて'), findsOneWidget);
+    expect(find.text('安全に関する注意'), findsOneWidget);
+    expect(find.textContaining('アレルギー'), findsOneWidget);
+    expect(find.textContaining('Apache License 2.0'), findsOneWidget);
+    expect(find.textContaining('Copyright 2026 kapioka'), findsOneWidget);
+    expect(
+      find.byKey(const Key('open_source_licenses_button')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('searches ingredients and saves searchable recipe tags', (
     tester,
   ) async {

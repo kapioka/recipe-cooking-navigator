@@ -74,7 +74,7 @@ pwsh -File .\tool\verify-release.ps1 `
 
 実機検証後、次をすべて確認してからtagとReleaseを作成します。
 
-- 公開ライセンス
+- Apache License 2.0、NOTICEの帰属表示、食品安全上の注意が配布物から確認できること
 - keystoreと復旧情報のバックアップ
 - PRのmerge commitとAPK生成元commit
 - `v0.1.0` tag、APK version `0.1.0`、versionCode `1`
