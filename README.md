@@ -178,6 +178,8 @@ pwsh -File .\tool\flutterw.ps1 test
 pwsh -File .\tool\flutterw.ps1 build apk --debug
 ```
 
+一般公開用APKはdebug鍵へfallbackしない専用手順で作成します。鍵の作成、正式署名build、検証方法は[Android release署名手順](docs/release-signing.md)を参照してください。
+
 ## ライセンス
 
 未決定です。ライセンスを確定するまでは、公開されているソースや文書の利用条件が明示されていない状態として扱ってください。

@@ -4,6 +4,43 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseStoreFile = System.getenv("RCN_RELEASE_STORE_FILE")
+val releaseStorePassword = System.getenv("RCN_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("RCN_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("RCN_RELEASE_KEY_PASSWORD")
+val releaseSigningValues =
+    listOf(
+        releaseStoreFile,
+        releaseStorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword,
+    )
+val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
+val releaseSigningPartiallyConfigured =
+    releaseSigningValues.any { !it.isNullOrBlank() } && !releaseSigningConfigured
+val releaseBuildRequested =
+    gradle.startParameter.taskNames.any { requestedTask ->
+        val taskName = requestedTask.substringAfterLast(':')
+        taskName.contains("release", ignoreCase = true) ||
+            taskName.equals("build", ignoreCase = true) ||
+            taskName.equals("assemble", ignoreCase = true) ||
+            taskName.equals("bundle", ignoreCase = true)
+    }
+
+if (releaseSigningPartiallyConfigured) {
+    throw GradleException(
+        "Release signing is only partially configured. " +
+            "Use tool/build-release.ps1 so no signing value is omitted.",
+    )
+}
+
+if (releaseBuildRequested && !releaseSigningConfigured) {
+    throw GradleException(
+        "Release signing is not configured. " +
+            "Use tool/build-release.ps1 with a dedicated keystore.",
+    )
+}
+
 android {
     namespace = "com.kapioka.recipe_cooking_navigator"
     compileSdk = flutter.compileSdkVersion
@@ -29,11 +66,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

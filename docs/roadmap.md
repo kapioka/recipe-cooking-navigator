@@ -8,6 +8,8 @@
 
 2026-09-06: 自動テスト26件、formatter、static analysis、Android debug buildが成功。Pixel 10a（Android 17 / API 37）へ更新し、既存Recipeデータ、文字サイズ、画面回転設定を保持したまま、検索、調理操作、途中再開、読み上げ、音声操作受付、タイマー調整・リセット、調理完了を確認した。タグ編集・再起動後の永続化、調理雑音下の実声認識、TalkBackは実機未検証。
 
+2026-09-07: 専用のrelease署名鍵と、debug鍵へfallbackしないbuild・検証手順を整備し、署名済み`0.1.0 (1)` APKを生成・検証した。一般公開には、鍵の復旧バックアップ、ライセンス決定、専用署名APKの実機検証、tag・GitHub Release公開が残っている。
+
 ### Initial public version scope
 
 初期公開版`0.1.0`の完了点は、「ChatGPTが生成したRecipeをファイルから取り込み、調理前確認を行い、1工程ずつ調理し、明示操作で調理完了を記録する」までとする。
