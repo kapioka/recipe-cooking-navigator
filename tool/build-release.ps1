@@ -36,6 +36,10 @@ if ($resolvedKeystorePath.StartsWith($repoPrefix, [StringComparison]::OrdinalIgn
 $flutterWrapper = Join-Path $PSScriptRoot 'flutterw.ps1'
 $verifyScript = Join-Path $PSScriptRoot 'verify-release.ps1'
 $apkPath = Join-Path $repoRoot 'build\app\outputs\flutter-apk\app-release.apk'
+$keytoolCommand = Get-Command keytool -ErrorAction SilentlyContinue
+if ($null -eq $keytoolCommand) {
+    throw 'keytool was not found. Install or select a JDK before building the signed APK.'
+}
 
 & $flutterWrapper pub get
 if ($LASTEXITCODE -ne 0) {
@@ -63,6 +67,16 @@ try {
     $env:RCN_RELEASE_KEY_ALIAS = $KeyAlias
     $env:RCN_RELEASE_KEY_PASSWORD = $password
     $env:GRADLE_OPTS = (($previousEnvironment.GradleOpts, '-Dorg.gradle.daemon=false') -join ' ').Trim()
+
+    & $keytoolCommand.Source `
+        -list `
+        -keystore $resolvedKeystorePath `
+        -alias $KeyAlias `
+        '-storepass:env' RCN_RELEASE_STORE_PASSWORD |
+        Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Keystore password or key alias verification failed. Check the saved release-signing information.'
+    }
 
     & $flutterWrapper build apk --release
     if ($LASTEXITCODE -ne 0) {
