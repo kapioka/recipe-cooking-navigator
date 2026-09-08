@@ -114,6 +114,9 @@ Google Driveをクラウド同期ではなく、WorkからアプリへRecipeフ�
 - [ ] Androidのシステムフォルダ選択で`Recipe Cooking Navigator/Inbox`を接続
 - [ ] フォルダアクセス権を端末内に保持し、失効時に安全な再選択を案内
 - [ ] ホームへ`新しいレシピを確認`ボタンを追加
+- [ ] 既存の`ChatGPTレシピを取り込む`単一ファイル取込を独立したバックアップ導線として維持
+- [ ] Inbox未設定、権限失効、provider / 通信 / Work障害時も単一ファイル取込を利用可能にする
+- [ ] 単一ファイル取込とInbox取込を同じSchema検証・重複判定・Recipe保存処理へ合流
 - [ ] Inbox直下の`.json`ファイルを手動で非再帰一括走査
 - [ ] 各ファイルを独立してparse・Schema検証し、正常ファイルだけ保存
 - [ ] 同一内容をスキップし、同一Recipe ID・revisionの内容違いを拒否
@@ -123,6 +126,8 @@ Google Driveをクラウド同期ではなく、WorkからアプリへRecipeフ�
 - [ ] Work → アプリだけとし、Feedback Outboxを追加しない
 - [ ] Google Drive API、独自OAuth、スプレッドシート、SQLを追加しない
 - [ ] 複数正常ファイル、正常＋不正混在、保存済み重複、競合Revision、権限失効、再起動後再確認のテスト
+- [ ] Work / Inbox障害中の単一ファイル取込と、両経路間の重複・競合回帰テスト
+- [ ] 実機でアプリ起動前、起動中、終了後の`accelerometer_rotation` / `user_rotation`が同一であることを確認
 
 ### Pre-cook view
 

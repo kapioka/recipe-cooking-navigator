@@ -51,6 +51,8 @@ iPhone版は「Android版とは別製品」ではなく、同じRecipe Cooking N
 - 通知 / タイマー実装
 - Android URI / permission
 
+Android固有APIを使う場合も、アプリは端末の画面回転設定を所有しない。`accelerometer_rotation`と`user_rotation`へ書き込まず、manifest、Activity、Flutter runtimeから端末の向きを永続的に変更しない。起動前、起動中、終了後で両設定が同一であることを各Android実機milestoneの受入条件にする。
+
 ### iOS
 
 - Share Sheet / Files連携

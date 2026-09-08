@@ -105,6 +105,10 @@ Android MVPは少なくとも次を満たす。
 
 ホーム画面には`新しいレシピを確認`ボタンを配置する。この操作をユーザーが明示的に実行したときだけInboxを走査し、自動監視、バックグラウンド同期、定期取込は行わない。フォルダが未設定またはアクセス権が失われている場合は、フォルダの再選択を案内し、既存Recipeを変更しない。
 
+既存の`ChatGPTレシピを取り込む`単一ファイル取込は削除・置換せず、WorkまたはGoogle Drive Recipe Inboxが利用できない場合の独立した手動バックアップ導線として常に残す。Inbox未設定、フォルダ権限失効、Google Drive provider非表示、通信不能、Work側の配置失敗、Inbox状態の読込失敗があっても、ユーザーは端末や任意のDocumentsProviderから1つのRecipeファイルを選んで取り込めることを必須とする。
+
+単一ファイル取込とInbox一括取込は、同じRecipe Schema検証、Recipe ID・revision重複判定、端末内Recipe保存処理を使用する。Inbox障害時に単一ファイルpickerを自動起動せず、ユーザーが既存ボタンを選んだ場合だけ開始する。片方の経路の接続状態や取込記録が、もう片方の利用可否や保存済みRecipeへ影響してはならない。
+
 一括取込規則:
 
 - 各ファイルを独立して読み込み、JSON parse、`schema_version`、`type`、Recipe Schemaを検証する
@@ -394,6 +398,8 @@ ChatGPTへ改善依頼する場合だけ、ユーザー操作によって必要�
 ## 22. Platform scope
 
 当面の実装対象はAndroid。最終的にはiPhone版も検討し、データ契約・ドメインモデル・主要UXは両OSで共通化できるようにする。
+
+Androidアプリは、起動、foreground復帰、画面遷移、Cooking mode開始・終了、アプリ終了のいずれでも端末の自動回転設定や固定回転方向を変更しない。Androidの`Settings.System`にある`accelerometer_rotation`と`user_rotation`へ書き込まず、ActivityやFlutterから端末向きを永続的に切り替えない。実機受入では、アプリ起動前、起動中、終了後に両方の値を読み取り、すべて同一であることを必須条件とする。
 
 iOS実装はAndroid版完成後に、Mac購入、Xcode環境、iPhone実機またはTestFlight協力者を含めて判断する。
 

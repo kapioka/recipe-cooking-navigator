@@ -199,4 +199,6 @@ OpenAI API直接統合はAndroid MVP外。
 
 初期実装でアプリからInboxへRecipeや状態を書き戻さない。Evaluation、Feedback JSON生成、Feedback Outbox、Work側への返却は後続の実装単位とし、Recipe Inboxへ混在させない。
 
+WorkやInboxが利用できない場合も、既存の`ChatGPTレシピを取り込む`単一ファイル取込をバックアップ導線として使用できるようにする。この経路はGoogle Drive接続やInbox取込記録へ依存せず、ユーザーが明示的にファイルを選択した場合だけ動作する。受信経路が異なってもRecipe JSON契約、Schema検証、重複・競合規則は変えない。
+
 Google Driveは受け渡し経路であり、Recipeのホスティング、リアルタイム同期、バックアップの正本として扱わない。Androidのシステムフォルダ選択を利用し、Google Drive API、独自OAuth、スプレッドシート、SQLデータベースは導入しない。
