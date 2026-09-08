@@ -10,6 +10,8 @@
 
 2026-09-07: 専用のrelease署名鍵と、debug鍵へfallbackしないbuild・検証手順を整備し、署名済み`0.1.0 (1)` APKを生成・検証した。鍵の復旧情報をバックアップし、Apache License 2.0、NOTICE、食品安全上の注意を採用した。一般公開には、専用署名APKの実機検証、tag・GitHub Release公開が残っている。
 
+2026-09-08: 専用署名APKをPixel 10aで検証し、PR #4をmainへmergeした。APK生成元commitへ`v0.1.0` tagを付け、APKとchecksumをGitHub Releaseへ公開して再ダウンロード照合まで完了した。次の実装単位はGoogle Drive Recipe Inboxとする。調理雑音下の実発話認識はPhase 5の実料理QAへ残す。
+
 ### Initial public version scope
 
 初期公開版`0.1.0`の完了点は、「ChatGPTが生成したRecipeをファイルから取り込み、調理前確認を行い、1工程ずつ調理し、明示操作で調理完了を記録する」までとする。
@@ -101,6 +103,26 @@
 - [ ] active Revision管理
 - [ ] 過去Versionをactiveへ戻す
 - [x] 同一Revision重複importの扱いを決定・実装（同一内容はno-op、異なる内容は拒否）
+
+### Next implementation unit — Google Drive Recipe Inbox
+
+Google Driveをクラウド同期ではなく、WorkからアプリへRecipeファイルを渡す任意の手動受信箱として使う。
+
+- [x] 初期スコープと一方向データフローを仕様化
+- [x] 重複、競合、不正ファイル、取込結果の処理契約を仕様化
+- [x] Drive文書IDと内容SHA-256を含む端末内取込記録を仕様化
+- [ ] Androidのシステムフォルダ選択で`Recipe Cooking Navigator/Inbox`を接続
+- [ ] フォルダアクセス権を端末内に保持し、失効時に安全な再選択を案内
+- [ ] ホームへ`新しいレシピを確認`ボタンを追加
+- [ ] Inbox直下の`.json`ファイルを手動で非再帰一括走査
+- [ ] 各ファイルを独立してparse・Schema検証し、正常ファイルだけ保存
+- [ ] 同一内容をスキップし、同一Recipe ID・revisionの内容違いを拒否
+- [ ] 取込、保存済みスキップ、拒否の件数とファイル別結果を表示
+- [ ] 取込後もInboxファイルを削除、移動、名前変更、上書きしない
+- [ ] 取込記録をRecipe / Feedbackとは別の端末内JSONへ永続化
+- [ ] Work → アプリだけとし、Feedback Outboxを追加しない
+- [ ] Google Drive API、独自OAuth、スプレッドシート、SQLを追加しない
+- [ ] 複数正常ファイル、正常＋不正混在、保存済み重複、競合Revision、権限失効、再起動後再確認のテスト
 
 ### Pre-cook view
 
