@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
+import 'about_dialog.dart';
 import 'recipe_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -33,7 +34,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('レシピ')),
+      appBar: AppBar(
+        title: const Text('レシピ'),
+        actions: [
+          IconButton(
+            key: const Key('app_information_button'),
+            tooltip: 'このアプリについて',
+            onPressed: () => showAppInformationDialog(context),
+            icon: const Icon(Icons.info_outline),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: AnimatedBuilder(
           animation: controller,

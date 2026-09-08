@@ -6,23 +6,11 @@ if ($flutterArgs.Count -eq 0) {
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$workspaceParent = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'FlutterWorkspaces'
-$workspaceLink = Join-Path $workspaceParent 'recipe-cooking-navigator'
+$workspaceDrive = 'R:'
+$workspaceRoot = "$workspaceDrive\"
 
-New-Item -ItemType Directory -Path $workspaceParent -Force | Out-Null
-
-if (Test-Path -LiteralPath $workspaceLink) {
-    $linkItem = Get-Item -LiteralPath $workspaceLink -Force
-    if (-not $linkItem.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
-        throw "The Flutter workspace path exists but is not a junction: $workspaceLink"
-    }
-
-    $linkTarget = [IO.Path]::GetFullPath(@($linkItem.Target)[0])
-    if (-not [StringComparer]::OrdinalIgnoreCase.Equals($linkTarget, $repoRoot)) {
-        throw "The Flutter workspace junction points elsewhere: $linkTarget"
-    }
-} else {
-    New-Item -ItemType Junction -Path $workspaceLink -Target $repoRoot | Out-Null
+if (Test-Path -LiteralPath $workspaceRoot) {
+    throw "The temporary Flutter workspace drive is already in use: $workspaceDrive"
 }
 
 $flutterCommand = Get-Command flutter -ErrorAction SilentlyContinue
@@ -40,12 +28,25 @@ if (($env:Path -split ';') -notcontains $flutterBin) {
     $env:Path = "$flutterBin;$env:Path"
 }
 
-Push-Location -LiteralPath $workspaceLink
+$driveMapped = $false
 try {
-    & $flutterPath @flutterArgs
-    $flutterExitCode = $LASTEXITCODE
+    & subst.exe $workspaceDrive $repoRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to map $workspaceDrive to the repository."
+    }
+    $driveMapped = $true
+
+    Push-Location -LiteralPath $workspaceRoot
+    try {
+        & $flutterPath @flutterArgs
+        $flutterExitCode = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
 } finally {
-    Pop-Location
+    if ($driveMapped) {
+        & subst.exe $workspaceDrive /D
+    }
 }
 
 exit $flutterExitCode

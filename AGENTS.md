@@ -40,7 +40,7 @@ FlutterによるAndroidプロジェクト初期化が完了し、Phase 1の実�
 - unit / widget tests: `pwsh -File .\tool\flutterw.ps1 test`
 - Android debug build: `pwsh -File .\tool\flutterw.ps1 build apk --debug`
 
-Windowsでは親パス`E:\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介してASCIIパスのjunctionから実行してください。junctionは同じリポジトリを指すだけで、ソースを複製しません。
+Windowsでは親パス`E:\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介して実行してください。wrapperは実行中だけ同じrepositoryをASCIIドライブへ割り当て、終了時に解除します。ソースは複製しません。
 
 新しい検証ツールやコマンドを追加する場合は、実際に導入・実行できることを確認してからこのファイルへ追記してください。
 

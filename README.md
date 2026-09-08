@@ -178,6 +178,10 @@ pwsh -File .\tool\flutterw.ps1 test
 pwsh -File .\tool\flutterw.ps1 build apk --debug
 ```
 
+一般公開用APKはdebug鍵へfallbackしない専用手順で作成します。鍵の作成、正式署名build、検証方法は[Android release署名手順](docs/release-signing.md)を参照してください。
+
 ## ライセンス
 
-未決定です。ライセンスを確定するまでは、公開されているソースや文書の利用条件が明示されていない状態として扱ってください。
+このプロジェクトは[Apache License 2.0](LICENSE)で公開しています。再配布する派生物では、ライセンス条件に従って[NOTICE](NOTICE)の帰属表示を保持してください。
+
+レシピ内容や調理支援機能に関する無保証、食品安全上の注意、責任制限については[Disclaimer / 安全上の注意](DISCLAIMER.md)も確認してください。
