@@ -80,20 +80,69 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: FilledButton.icon(
-                    key: const Key('import_recipe_button'),
-                    onPressed: controller.isImporting
-                        ? null
-                        : () => _importRecipe(context),
-                    icon: controller.isImporting
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.file_open_outlined),
-                    label: Text(
-                      controller.isImporting ? '読み込み中…' : 'ChatGPTレシピを取り込む',
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FilledButton.icon(
+                        key: const Key('check_recipe_inbox_button'),
+                        onPressed: controller.isBusy ? null : _checkInbox,
+                        icon: controller.isCheckingInbox
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.cloud_download_outlined),
+                        label: Text(
+                          controller.isCheckingInbox ? '確認中…' : '新しいレシピを確認',
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const Key('import_recipe_button'),
+                              onPressed: controller.isImporting
+                                  ? null
+                                  : () => _importRecipe(context),
+                              icon: controller.isImporting
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.file_open_outlined),
+                              label: Text(
+                                controller.isImporting
+                                    ? '読み込み中…'
+                                    : 'ChatGPTレシピを取り込む',
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: const Key('select_inbox_folder_button'),
+                            tooltip: 'Google Drive / AI / Recipe Cooking Navigator / Inboxを選ぶ',
+                            onPressed: controller.isInboxBusy
+                                ? null
+                                : _selectInboxFolder,
+                            icon: const Icon(
+                              Icons.drive_folder_upload_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (controller.inboxFolder case final folder?) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '接続先: Google Drive / ${folder.displayName}',
+                          key: const Key('recipe_inbox_connection'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 if (controller.loadError case final error?)
@@ -162,6 +211,148 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: result.status == RecipeImportStatus.failed
             ? colorScheme.error
             : null,
+      ),
+    );
+  }
+
+  Future<void> _selectInboxFolder() async {
+    final result = await controller.selectInboxFolder();
+    if (!mounted ||
+        result.status == RecipeInboxFolderSelectionStatus.cancelled) {
+      return;
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor:
+            result.status == RecipeInboxFolderSelectionStatus.failed
+            ? colorScheme.error
+            : null,
+      ),
+    );
+  }
+
+  Future<void> _checkInbox() async {
+    var result = await controller.checkInbox();
+    if (!mounted) {
+      return;
+    }
+
+    if (result.status == RecipeInboxRunStatus.folderSelectionRequired) {
+      final selectFolder = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Inboxフォルダを選択'),
+          content: Text(
+            '${result.message}\n\nGoogle Drive / AI / Recipe Cooking Navigator / Inboxを選択してください。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              key: const Key('confirm_select_inbox_folder'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('フォルダを選ぶ'),
+            ),
+          ],
+        ),
+      );
+      if (selectFolder != true || !mounted) {
+        return;
+      }
+
+      final selection = await controller.selectInboxFolder();
+      if (!mounted ||
+          selection.status == RecipeInboxFolderSelectionStatus.cancelled) {
+        return;
+      }
+      if (selection.status == RecipeInboxFolderSelectionStatus.failed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(selection.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        return;
+      }
+      result = await controller.checkInbox();
+      if (!mounted) {
+        return;
+      }
+    }
+
+    if (result.status == RecipeInboxRunStatus.completed) {
+      await _showInboxResult(result);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _showInboxResult(RecipeInboxRunResult result) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Inboxの確認結果'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(result.message),
+              const SizedBox(height: 4),
+              const Text('Inbox内のファイルは変更していません。'),
+              if (result.files.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: (result.files.length * 72).clamp(72, 240).toDouble(),
+                  child: ListView.separated(
+                    itemCount: result.files.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final file = result.files[index];
+                      final (icon, color) = switch (file.status) {
+                        RecipeInboxFileStatus.imported => (
+                          Icons.check_circle_outline,
+                          Theme.of(context).colorScheme.primary,
+                        ),
+                        RecipeInboxFileStatus.skipped => (
+                          Icons.skip_next_outlined,
+                          Theme.of(context).colorScheme.secondary,
+                        ),
+                        RecipeInboxFileStatus.rejected => (
+                          Icons.error_outline,
+                          Theme.of(context).colorScheme.error,
+                        ),
+                      };
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(icon, color: color),
+                        title: Text(file.fileName),
+                        subtitle: Text(file.message),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('閉じる'),
+          ),
+        ],
       ),
     );
   }

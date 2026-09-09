@@ -19,6 +19,7 @@ import java.util.Locale
 
 class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
+    private var inboxChannel: RecipeInboxChannel? = null
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -83,6 +84,7 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        inboxChannel = RecipeInboxChannel(this, flutterEngine.dartExecutor.binaryMessenger)
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 val language = tts?.setLanguage(Locale.JAPAN)
@@ -220,6 +222,10 @@ class MainActivity : FlutterActivity() {
             else { voiceWanted = false; event("voiceError", "マイクの許可が必要です。") }
         }
     }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        inboxChannel?.onActivityResult(requestCode, resultCode, data)
+    }
     private fun closeCooking() {
         cooking = false; voiceWanted = false; speaking = false
         cancelRecognition(); stopSpeakingIntentionally()
@@ -236,6 +242,7 @@ class MainActivity : FlutterActivity() {
         if (cooking) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
     override fun onDestroy() {
+        inboxChannel?.dispose()
         closeCooking(); recognizer?.destroy(); tts?.shutdown(); super.onDestroy()
     }
 }

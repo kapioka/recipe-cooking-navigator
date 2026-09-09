@@ -88,6 +88,49 @@ Android MVPは少なくとも次を満たす。
 - タグは端末内の整理用メタデータとし、Recipe JSONへ追加しない
 - Feedback JSONやSNS共有物へ自動的に含めない
 
+### Google Drive Recipe Inbox
+
+次の実装単位として、Google Drive上の専用フォルダへ置かれたRecipeをアプリから手動で一括確認する受信経路を追加する。
+
+この機能はクラウド同期やバックアップではない。Google DriveをRecipeファイルの受け渡し場所として使い、取り込んだRecipeの正本は従来どおりアプリの端末内保存とする。Google Drive API、アプリ独自のGoogleログイン、専用バックエンドは使用せず、Androidのシステムフォルダ選択を介してユーザーがフォルダを指定する。
+
+初期構成:
+
+- 保存先はGoogle Drive内の専用フォルダとする
+- 推奨フォルダ名は`Recipe Cooking Navigator/Inbox`とする
+- ユーザーがAndroidのシステムフォルダ選択で`Inbox`フォルダを選び、アプリはそのアクセス権を端末内に保持する
+- 選択結果はGoogle DriveのDocumentsProviderであり、選択フォルダ名が`Inbox`であることを検証する。SAFから親フォルダの安定したpathは取得できないため、`Recipe Cooking Navigator`配下を選ぶことは選択画面の案内とユーザー確認で担保する
+- フォルダを変更した場合は、新しい接続状態の保存後に以前のフォルダの永続アクセス権を解除する
+- 1つのRecipe JSONファイルには1つのRecipe documentだけを含める
+- ファイル名をRecipeのidentityとして扱わず、JSON内のRecipe IDとrevisionを正本とする
+- 初期実装は選択フォルダ直下の`.json`ファイルだけを対象とし、サブフォルダは再帰走査しない
+
+ホーム画面には`新しいレシピを確認`ボタンを配置する。この操作をユーザーが明示的に実行したときだけInboxを走査し、自動監視、バックグラウンド同期、定期取込は行わない。フォルダが未設定またはアクセス権が失われている場合は、フォルダの再選択を案内し、既存Recipeを変更しない。
+
+既存の`ChatGPTレシピを取り込む`単一ファイル取込は削除・置換せず、WorkまたはGoogle Drive Recipe Inboxが利用できない場合の独立した手動バックアップ導線として常に残す。Inbox未設定、フォルダ権限失効、Google Drive provider非表示、通信不能、Work側の配置失敗、Inbox状態の読込失敗があっても、ユーザーは端末や任意のDocumentsProviderから1つのRecipeファイルを選んで取り込めることを必須とする。
+
+Inbox確認中も単一ファイル取込ボタンを利用可能とする。Inbox走査は30秒で打ち切り、1回100ファイル、1ファイル1 MB、合計5 MBを上限とする。上限を超えた個別ファイルは拒否し、処理可能な他ファイルは継続する。
+
+単一ファイル取込とInbox一括取込は、同じRecipe Schema検証、Recipe ID・revision重複判定、端末内Recipe保存処理を使用する。Inbox障害時に単一ファイルpickerを自動起動せず、ユーザーが既存ボタンを選んだ場合だけ開始する。片方の経路の接続状態や取込記録が、もう片方の利用可否や保存済みRecipeへ影響してはならない。
+
+一括取込規則:
+
+- 各ファイルを独立して読み込み、JSON parse、`schema_version`、`type`、Recipe Schemaを検証する
+- Schemaに適合した新しいRecipe IDまたはRevisionだけを端末内へ追加する
+- 同じRecipe ID・revisionで内容も同一なら、保存済みとしてスキップする
+- 同じRecipe ID・revisionで内容が異なる場合は、既存Revisionを上書きせず、そのファイルだけを拒否する
+- 壊れたJSON、必須項目欠落、未対応Schemaなどの不正ファイルは推測補完せず、そのファイルだけを拒否する
+- あるファイルの拒否で他の正常ファイルの処理を中止しない。ただしフォルダ自体を読み取れない場合は一括処理を開始しない
+- 完了後に、取込件数、保存済みとしてスキップした件数、拒否件数とファイルごとの結果を表示する
+- Inbox内のファイルは、取込後もアプリから削除、移動、名前変更、上書きしない
+- 正常に取り込んだファイルと同一内容として処理したファイルは、Drive文書ID、内容SHA-256、Recipe ID、revisionを端末内の取込記録へ保存する
+- 取込記録が存在しても、対応するRecipe IDとrevisionが端末内に存在しない場合は古い記録として再検証・再取り込みする
+- 不正ファイルは取込済みとして記録せず、修正後の再確認を可能にする
+
+初回のデータ方向は`Work → Google Drive Inbox → アプリ`の一方向だけとする。ここでいう`Work`はRecipe JSONをInboxへ配置する上流側作業を指し、アプリからWorkやInboxへRecipeを書き戻さない。Feedback OutboxはEvaluation / Feedback機能を実装するときに別の実装単位として追加する。
+
+初期構築ではスプレッドシートとSQLデータベースを使用しない。フォルダ接続情報と取込記録はRecipe documentから分離した端末内JSONデータとして保持する。
+
 ## 5. 調理前画面
 
 通常表示は「読むモード」として縦スクロールで全体を確認する。「調理開始」で、現在の1工程を大きく表示する「作るモード」（Cooking mode）へ切り替える。
@@ -360,6 +403,8 @@ ChatGPTへ改善依頼する場合だけ、ユーザー操作によって必要�
 ## 22. Platform scope
 
 当面の実装対象はAndroid。最終的にはiPhone版も検討し、データ契約・ドメインモデル・主要UXは両OSで共通化できるようにする。
+
+Androidアプリは、起動、foreground復帰、画面遷移、Cooking mode開始・終了、アプリ終了のいずれでも端末の自動回転設定や固定回転方向を変更しない。Androidの`Settings.System`にある`accelerometer_rotation`と`user_rotation`へ書き込まず、ActivityやFlutterから端末向きを永続的に切り替えない。実機受入では、アプリ起動前、起動中、終了後に両方の値を読み取り、すべて同一であることを必須条件とする。
 
 iOS実装はAndroid版完成後に、Mac購入、Xcode環境、iPhone実機またはTestFlight協力者を含めて判断する。
 

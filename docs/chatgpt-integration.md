@@ -180,3 +180,27 @@ SNS投稿文へ含められる候補:
 OpenAI API直接統合はAndroid MVP外。
 
 将来導入する場合も、現在のRecipe / Feedback JSON契約を維持し、UIや保存モデルをAPI固有仕様へ直接結合しないことを優先する。
+
+## 14. Google Drive Recipe Inbox
+
+次のAndroid実装単位では、`Work → Google Drive Inbox → アプリ`の一方向受信を追加する。
+
+`Work`は、ChatGPT等で作成したRecipe JSONをGoogle Driveの`Recipe Cooking Navigator/Inbox`へ配置する上流側作業の総称とする。特定のAI API、会話履歴、GoogleアカウントIDをRecipe JSONへ追加しない。
+
+受け渡し契約:
+
+1. Work側は、1レシピにつき1つのRecipe JSONファイルをInbox直下へ配置する
+2. ユーザーがアプリで`新しいレシピを確認`を実行する
+3. アプリは各`.json`ファイルを独立してparse・Schema検証する
+4. 正常な新規Recipe / Revisionを端末内へ保存し、同一内容はスキップ、同一Recipe ID・revisionの内容違いは拒否する
+5. アプリは取込結果を表示し、Inbox内のファイル自体は変更しない
+
+あるファイルが不正でも他の正常ファイルは処理する。不正データを推測補完せず、不正ファイルを取込済みとして記録しない。
+
+Android側は、選択先がGoogle DriveのDocumentsProviderかつ`Inbox`フォルダであることを検証する。Inbox走査は30秒、100ファイル、1ファイル1 MB、合計5 MBを上限とし、上限超過や不正なSHA-256 metadataを個別ファイルの拒否として扱う。Inbox確認中も既存の単一ファイル取込を利用できる状態に保つ。
+
+初期実装でアプリからInboxへRecipeや状態を書き戻さない。Evaluation、Feedback JSON生成、Feedback Outbox、Work側への返却は後続の実装単位とし、Recipe Inboxへ混在させない。
+
+WorkやInboxが利用できない場合も、既存の`ChatGPTレシピを取り込む`単一ファイル取込をバックアップ導線として使用できるようにする。この経路はGoogle Drive接続やInbox取込記録へ依存せず、ユーザーが明示的にファイルを選択した場合だけ動作する。受信経路が異なってもRecipe JSON契約、Schema検証、重複・競合規則は変えない。
+
+Google Driveは受け渡し経路であり、Recipeのホスティング、リアルタイム同期、バックアップの正本として扱わない。Androidのシステムフォルダ選択を利用し、Google Drive API、独自OAuth、スプレッドシート、SQLデータベースは導入しない。

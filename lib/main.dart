@@ -6,11 +6,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'application/recipe_library_controller.dart';
-import 'data/recipe_document_store.dart';
-import 'data/recipe_tag_store.dart';
 import 'data/cooking_store.dart';
+import 'data/recipe_document_store.dart';
+import 'data/recipe_inbox_state_store.dart';
+import 'data/recipe_tag_store.dart';
 import 'domain/recipe_validator.dart';
 import 'platform/recipe_file_picker.dart';
+import 'platform/recipe_inbox_platform.dart';
 import 'ui/home_screen.dart';
 
 Future<void> main() async {
@@ -27,6 +29,10 @@ Future<void> main() async {
     pickRecipeSource,
     cookingStore: CookingStore(
       File('${supportDirectory.path}/cooking-v1.json'),
+    ),
+    recipeInboxPlatform: const AndroidRecipeInboxPlatform(),
+    recipeInboxStateStore: FileRecipeInboxStateStore(
+      File('${supportDirectory.path}/recipe-inbox-v1.json'),
     ),
   );
   await controller.load();

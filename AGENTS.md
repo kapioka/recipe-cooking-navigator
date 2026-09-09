@@ -65,6 +65,7 @@ Windowsでは親パス`E:\作ってみた`の非ASCII文字をAndroid Gradle Plu
 - 一度のEvaluationだけで恒久的なPreference Profileを断定しない。
 - タイマーはユーザー起動とし、終了しても自動で次Stepへ進めない。
 - Cooking mode中のみ必要に応じて画面常時点灯を有効化し、終了時に解除する。
+- アプリの起動、foreground復帰、利用、終了によって端末の画面回転設定を変更しない。Androidでは起動前、起動中、終了後の`accelerometer_rotation`と`user_rotation`が同一であることを必須とする。
 - 音声操作と現在StepのTTS読み上げはAndroid MVPの必須機能である。
 - 調理効率より食品安全を優先する。
 
@@ -216,6 +217,7 @@ Android MVPは`docs/roadmap.md`のPhase 1〜2を中心に進めます。
 8. タイマー終了で自動Step遷移しない。
 9. Cooking mode終了時に画面常時点灯を解除する。
 10. 音声操作 / TTS追加後は調理雑音下での誤認識リスクを実機確認する。
+11. アプリ起動前、起動中、終了後で端末の自動回転設定と固定回転方向が変化しない。
 
 ## 12. Stop / ask conditions
 

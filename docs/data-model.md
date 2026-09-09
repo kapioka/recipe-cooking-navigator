@@ -363,3 +363,37 @@ RecipeLocalMetadata
 ホーム検索では、通常表示に使うRevision（`active_revision`があればactive、未設定なら`latest_revision`）の料理名と食材名、およびRecipe IDに紐づくタグを検索対象とする。いずれかが検索語と部分一致すればRecipe単位で結果へ含める。
 
 検索インデックスを将来追加する場合も、正本はRecipe Revisionと`RecipeLocalMetadata`に置き、インデックスを正本データとして扱わない。
+
+## 26. Google Drive Recipe Inbox local state
+
+Google Drive Recipe Inboxの接続状態と取込記録は、Recipe / Feedback Schemaへ追加せず、Android固有adapterの端末内データとして管理する。初期構築ではスプレッドシートやSQLデータベースを使わず、既存の端末内JSON保存方針に合わせる。
+
+```text
+RecipeInboxState
+ ├─ connection
+ │   ├─ connection_id
+ │   ├─ tree_uri
+ │   └─ configured_at
+ └─ receipts[]
+     ├─ receipt_id
+     ├─ connection_id
+     ├─ source_document_id
+     ├─ content_sha256
+     ├─ recipe_id
+     ├─ revision
+     ├─ result
+     └─ handled_at
+```
+
+- `tree_uri`と`source_document_id`はAndroid DocumentsProviderが返すopaqueな値として扱い、Recipe JSON、Feedback JSON、共有物へ含めない
+- `receipt_id`は端末内の取込記録を識別するIDであり、Recipe IDやrevisionの代わりにしない
+- `content_sha256`は同じDrive文書が変更されていないことを高速に判定するための補助情報とする
+- Recipe重複・競合判定の正本は、parseとSchema検証を通過したRecipe documentのRecipe ID、revision、内容比較とする
+- `result`の初期値は`imported`または`already_exists`とし、拒否したファイルはreceiptへ追加しない
+- receiptは対象Recipeの端末内保存に成功した後だけ追加する。receipt保存に失敗した場合も既存RecipeやInboxファイルを削除・上書きしない
+- 同じ`source_document_id`でも内容SHA-256が変化した場合は再検証する。新Revisionなら追加し、同一Recipe ID・revisionの内容違いなら拒否する
+- receiptが一致しても対応するRecipe IDとrevisionが端末内に存在しない場合は、receiptを古い記録として対象ファイルを再検証する
+- フォルダ接続とreceiptのread-modify-writeは直列化し、並行操作で一方の更新を失わない
+- フォルダの再選択で`connection_id`が変わっても、Recipe保存側の重複・競合規則を維持する
+
+Inboxは取込元の追跡情報であり、Recipeの正本、backup、同期状態、処理queueではない。
