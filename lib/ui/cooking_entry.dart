@@ -81,6 +81,7 @@ class _CookingEntryState extends State<CookingEntry> {
               child: const Text('キャンセル'),
             ),
             FilledButton(
+              key: const Key('confirm_restart_cooking'),
               onPressed: () => Navigator.pop(context, true),
               child: const Text('最初から'),
             ),

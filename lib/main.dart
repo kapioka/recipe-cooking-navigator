@@ -10,6 +10,7 @@ import 'data/cooking_store.dart';
 import 'data/recipe_document_store.dart';
 import 'data/recipe_inbox_state_store.dart';
 import 'data/recipe_tag_store.dart';
+import 'data/recipe_version_state_store.dart';
 import 'domain/recipe_validator.dart';
 import 'platform/recipe_file_picker.dart';
 import 'platform/recipe_inbox_platform.dart';
@@ -33,6 +34,9 @@ Future<void> main() async {
     recipeInboxPlatform: const AndroidRecipeInboxPlatform(),
     recipeInboxStateStore: FileRecipeInboxStateStore(
       File('${supportDirectory.path}/recipe-inbox-v1.json'),
+    ),
+    recipeVersionStateStore: FileRecipeVersionStateStore(
+      File('${supportDirectory.path}/recipe-version-state-v1.json'),
     ),
   );
   await controller.load();

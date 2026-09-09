@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
 import 'cooking_entry.dart';
+import 'recipe_version_history_screen.dart';
 
 class RecipeDetailScreen extends StatelessWidget {
   const RecipeDetailScreen({
@@ -19,9 +20,12 @@ class RecipeDetailScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final tags = controller.tagsFor(recipe.id);
-        final utensils = recipe.recipeData['utensils'] as List;
-        final preparation = recipe.recipeData['preparation'] as List;
+        final activeRecipe = controller.activeRecipeFor(recipe.id) ?? recipe;
+        final latestRecipe = controller.latestRecipeFor(recipe.id);
+        final revisions = controller.revisionsFor(recipe.id);
+        final tags = controller.tagsFor(activeRecipe.id);
+        final utensils = activeRecipe.recipeData['utensils'] as List;
+        final preparation = activeRecipe.recipeData['preparation'] as List;
         return Scaffold(
           appBar: AppBar(
             title: const Text('レシピ詳細'),
@@ -38,7 +42,7 @@ class RecipeDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             children: [
               Text(
-                recipe.title,
+                activeRecipe.title,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 12),
@@ -46,14 +50,42 @@ class RecipeDetailScreen extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  Chip(label: Text('${recipe.servings}人分')),
-                  Chip(label: Text('${recipe.totalTimeMinutes}分')),
-                  Chip(label: Text('AI想定難易度 ${recipe.estimatedDifficulty}')),
-                  Chip(label: Text('Version ${recipe.revision}')),
+                  Chip(label: Text('${activeRecipe.servings}人分')),
+                  Chip(label: Text('${activeRecipe.totalTimeMinutes}分')),
+                  Chip(
+                    label: Text('AI想定難易度 ${activeRecipe.estimatedDifficulty}'),
+                  ),
+                  Chip(
+                    key: const Key('active_recipe_version_chip'),
+                    label: Text('Active Version ${activeRecipe.revision}'),
+                  ),
+                  if (latestRecipe != null &&
+                      latestRecipe.revision != activeRecipe.revision)
+                    Chip(
+                      label: Text('Latest Version ${latestRecipe.revision}'),
+                    ),
                 ],
               ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('open_version_history'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => RecipeVersionHistoryScreen(
+                      recipeId: activeRecipe.id,
+                      controller: controller,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.history),
+                label: Text('Version履歴（${revisions.length}件）'),
+              ),
               const SizedBox(height: 24),
-              CookingEntry(recipe: recipe, controller: controller),
+              CookingEntry(
+                key: ValueKey('${activeRecipe.id}:${activeRecipe.revision}'),
+                recipe: activeRecipe,
+                controller: controller,
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -83,7 +115,7 @@ class RecipeDetailScreen extends StatelessWidget {
               const SizedBox(height: 24),
               Text('材料', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              ...recipe.ingredients.map(
+              ...activeRecipe.ingredients.map(
                 (ingredient) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(ingredient.name),
@@ -124,7 +156,7 @@ class RecipeDetailScreen extends StatelessWidget {
               const SizedBox(height: 20),
               Text('全体工程', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              ...recipe.overview.indexed.map(
+              ...activeRecipe.overview.indexed.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(

@@ -493,7 +493,7 @@ class _RecipeCard extends StatelessWidget {
             children: [
               Text(
                 '${recipe.servings}人分 ・ ${recipe.totalTimeMinutes}分 ・ '
-                '難易度${recipe.estimatedDifficulty} ・ Version ${recipe.revision}',
+                '難易度${recipe.estimatedDifficulty} ・ Active Version ${recipe.revision}',
               ),
               if (tags.isNotEmpty) ...[
                 const SizedBox(height: 6),
