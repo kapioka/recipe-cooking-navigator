@@ -6,6 +6,7 @@ import '../data/cooking_store.dart';
 import '../data/recipe_document_store.dart';
 import '../data/recipe_inbox_state_store.dart';
 import '../data/recipe_tag_store.dart';
+import '../data/recipe_version_state_store.dart';
 import '../domain/recipe_document.dart';
 import '../domain/recipe_inbox.dart';
 import '../domain/recipe_validator.dart';
@@ -19,6 +20,15 @@ class RecipeImportResult {
   const RecipeImportResult(this.status, this.message);
 
   final RecipeImportStatus status;
+  final String message;
+}
+
+enum ActiveRevisionUpdateStatus { updated, alreadyActive, notFound, failed }
+
+class ActiveRevisionUpdateResult {
+  const ActiveRevisionUpdateResult(this.status, this.message);
+
+  final ActiveRevisionUpdateStatus status;
   final String message;
 }
 
@@ -96,13 +106,16 @@ class RecipeLibraryController extends ChangeNotifier {
     CookingStore? cookingStore,
     RecipeInboxPlatform? recipeInboxPlatform,
     RecipeInboxStateStore? recipeInboxStateStore,
+    RecipeVersionStateStore? recipeVersionStateStore,
   }) : assert(
          (recipeInboxPlatform == null) == (recipeInboxStateStore == null),
          'Inbox platform and state store must be provided together.',
        ),
        cookingStore = cookingStore ?? CookingStore(),
        _recipeInboxPlatform = recipeInboxPlatform,
-       _recipeInboxStateStore = recipeInboxStateStore;
+       _recipeInboxStateStore = recipeInboxStateStore,
+       _recipeVersionStateStore =
+           recipeVersionStateStore ?? MemoryRecipeVersionStateStore();
 
   final CookingStore cookingStore;
 
@@ -113,16 +126,50 @@ class RecipeLibraryController extends ChangeNotifier {
     return null;
   }
 
+  List<RecipeDocument> revisionsFor(String id) {
+    final revisions =
+        _documents
+            .where((document) => document.id == id)
+            .toList(growable: false)
+          ..sort((a, b) => b.revision.compareTo(a.revision));
+    return List.unmodifiable(revisions);
+  }
+
+  RecipeDocument? latestRecipeFor(String id) {
+    for (final document in _latestRecipes) {
+      if (document.id == id) return document;
+    }
+    return null;
+  }
+
+  RecipeDocument? activeRecipeFor(String id) {
+    final latest = latestRecipeFor(id);
+    if (latest == null) return null;
+    final selectedRevision = _activeRevisionsByRecipeId[id];
+    return selectedRevision == null
+        ? latest
+        : revisionFor(id, selectedRevision) ?? latest;
+  }
+
+  bool isActiveRevision(String id, int revision) =>
+      activeRecipeFor(id)?.revision == revision;
+
+  bool isLatestRevision(String id, int revision) =>
+      latestRecipeFor(id)?.revision == revision;
+
   final RecipeDocumentStore _store;
   final RecipeTagStore _tagStore;
   final RecipeValidator _validator;
   final RecipeSourcePicker _pickRecipeSource;
   final RecipeInboxPlatform? _recipeInboxPlatform;
   final RecipeInboxStateStore? _recipeInboxStateStore;
+  final RecipeVersionStateStore _recipeVersionStateStore;
 
   List<RecipeDocument> _documents = const [];
   List<RecipeDocument> _latestRecipes = const [];
+  List<RecipeDocument> _activeRecipes = const [];
   List<RecipeDocument> _visibleRecipes = const [];
+  Map<String, int> _activeRevisionsByRecipeId = const {};
   Map<String, List<String>> _tagsByRecipeId = const {};
   List<RecipeSearchSuggestion> _searchSuggestions = const [];
   String _searchQuery = '';
@@ -130,12 +177,14 @@ class RecipeLibraryController extends ChangeNotifier {
   bool _isCheckingInbox = false;
   bool _isSelectingInboxFolder = false;
   Future<RecipeInboxRunResult>? _activeInboxCheck;
-  Future<void> _recipeSaveTail = Future<void>.value();
+  Future<void> _libraryMutationTail = Future<void>.value();
   RecipeInboxFolder? _inboxFolder;
   String? _loadError;
+  String? _versionStateLoadError;
+  bool _versionStateReadable = true;
 
   List<RecipeDocument> get recipes => _visibleRecipes;
-  int get totalRecipeCount => _latestRecipes.length;
+  int get totalRecipeCount => _activeRecipes.length;
   String get searchQuery => _searchQuery;
   List<RecipeSearchSuggestion> get searchSuggestions => _searchSuggestions;
   bool get isImporting => _isImporting;
@@ -144,7 +193,10 @@ class RecipeLibraryController extends ChangeNotifier {
   bool get isInboxBusy => _isCheckingInbox || _isSelectingInboxFolder;
   bool get isBusy => _isImporting || isInboxBusy;
   RecipeInboxFolder? get inboxFolder => _inboxFolder;
-  String? get loadError => _loadError;
+  String? get loadError {
+    final messages = <String>[?_loadError, ?_versionStateLoadError];
+    return messages.isEmpty ? null : messages.join('\n');
+  }
 
   List<String> tagsFor(String recipeId) {
     return _tagsByRecipeId[recipeId] ?? const [];
@@ -158,17 +210,40 @@ class RecipeLibraryController extends ChangeNotifier {
           .toList(growable: false);
       _rebuildLatestRecipes();
       _loadError = null;
+      _versionStateLoadError = null;
     } catch (error) {
       _documents = const [];
       _latestRecipes = const [];
+      _activeRecipes = const [];
       _visibleRecipes = const [];
+      _activeRevisionsByRecipeId = const {};
       _tagsByRecipeId = const {};
       _searchSuggestions = const [];
       _loadError = error is RecipeStorageException
           ? error.message
           : '保存済みレシピを読み込めませんでした。';
+      _versionStateLoadError = null;
       notifyListeners();
       return;
+    }
+
+    try {
+      final storedActiveRevisions = await _recipeVersionStateStore
+          .loadActiveRevisions();
+      _versionStateReadable = true;
+      _activeRevisionsByRecipeId = Map.unmodifiable(storedActiveRevisions);
+      _rebuildActiveRecipes();
+      _refreshVersionStateLoadError();
+    } on RecipeVersionStateStorageException catch (error) {
+      _versionStateReadable = false;
+      _activeRevisionsByRecipeId = const {};
+      _rebuildActiveRecipes();
+      _versionStateLoadError = error.message;
+    } catch (_) {
+      _versionStateReadable = false;
+      _activeRevisionsByRecipeId = const {};
+      _rebuildActiveRecipes();
+      _versionStateLoadError = 'active Versionの保存状態を読み込めませんでした。';
     }
 
     try {
@@ -515,7 +590,7 @@ class RecipeLibraryController extends ChangeNotifier {
   }
 
   Future<_RecipeSaveOutcome> _saveSource(String source) =>
-      _synchronizeRecipeSave(() async {
+      _synchronizeLibraryMutation(() async {
         final document = _validator.validateSource(source);
         final storeResult = await _store.saveDocument(document.raw);
         if (storeResult == StoreRecipeResult.added) {
@@ -526,10 +601,10 @@ class RecipeLibraryController extends ChangeNotifier {
         return _RecipeSaveOutcome(document, storeResult);
       });
 
-  Future<T> _synchronizeRecipeSave<T>(Future<T> Function() action) {
-    final previous = _recipeSaveTail;
+  Future<T> _synchronizeLibraryMutation<T>(Future<T> Function() action) {
+    final previous = _libraryMutationTail;
     final release = Completer<void>();
-    _recipeSaveTail = release.future;
+    _libraryMutationTail = release.future;
     return () async {
       await previous;
       try {
@@ -548,6 +623,51 @@ class RecipeLibraryController extends ChangeNotifier {
     _rebuildSearch();
     notifyListeners();
   }
+
+  Future<ActiveRevisionUpdateResult> setActiveRevision(
+    String recipeId,
+    int revision,
+  ) => _synchronizeLibraryMutation(() async {
+    final selected = revisionFor(recipeId, revision);
+    if (selected == null) {
+      return const ActiveRevisionUpdateResult(
+        ActiveRevisionUpdateStatus.notFound,
+        '選択したVersionが見つかりません。保存状態は変更していません。',
+      );
+    }
+    if (isActiveRevision(recipeId, revision)) {
+      return const ActiveRevisionUpdateResult(
+        ActiveRevisionUpdateStatus.alreadyActive,
+        'このVersionはすでにactiveです。',
+      );
+    }
+
+    try {
+      await _recipeVersionStateStore.saveActiveRevision(recipeId, revision);
+      _activeRevisionsByRecipeId = Map.unmodifiable({
+        ..._activeRevisionsByRecipeId,
+        recipeId: revision,
+      });
+      _rebuildActiveRecipes();
+      _versionStateReadable = true;
+      _refreshVersionStateLoadError();
+      notifyListeners();
+      return ActiveRevisionUpdateResult(
+        ActiveRevisionUpdateStatus.updated,
+        'Version $revisionをactiveにしました。',
+      );
+    } on RecipeVersionStateStorageException catch (error) {
+      return ActiveRevisionUpdateResult(
+        ActiveRevisionUpdateStatus.failed,
+        error.message,
+      );
+    } catch (_) {
+      return const ActiveRevisionUpdateResult(
+        ActiveRevisionUpdateStatus.failed,
+        'active Versionを変更できませんでした。',
+      );
+    }
+  });
 
   Future<RecipeTagSaveResult> setTags(
     String recipeId,
@@ -603,19 +723,44 @@ class RecipeLibraryController extends ChangeNotifier {
     }
     _latestRecipes = latestById.values.toList(growable: false)
       ..sort((a, b) => a.title.compareTo(b.title));
+    _rebuildActiveRecipes();
+  }
+
+  void _rebuildActiveRecipes() {
+    _activeRecipes =
+        _latestRecipes
+            .map((latest) {
+              final selectedRevision = _activeRevisionsByRecipeId[latest.id];
+              return selectedRevision == null
+                  ? latest
+                  : revisionFor(latest.id, selectedRevision) ?? latest;
+            })
+            .toList(growable: false)
+          ..sort((a, b) => a.title.compareTo(b.title));
     _rebuildSearch();
+    _refreshVersionStateLoadError();
+  }
+
+  void _refreshVersionStateLoadError() {
+    if (!_versionStateReadable) return;
+    final hasMissingRevision = _activeRevisionsByRecipeId.entries.any(
+      (entry) => revisionFor(entry.key, entry.value) == null,
+    );
+    _versionStateLoadError = hasMissingRevision
+        ? '保存したactive Versionが見つからないレシピは、最新Versionを表示しています。状態は変更していません。'
+        : null;
   }
 
   void _rebuildSearch() {
     final normalizedQuery = normalizeSearchText(_searchQuery);
     if (normalizedQuery.isEmpty) {
-      _visibleRecipes = List.unmodifiable(_latestRecipes);
+      _visibleRecipes = List.unmodifiable(_activeRecipes);
       _searchSuggestions = const [];
       return;
     }
 
     _visibleRecipes = List.unmodifiable(
-      _latestRecipes.where((recipe) {
+      _activeRecipes.where((recipe) {
         return _searchableValues(
           recipe,
         ).any((value) => normalizeSearchText(value).contains(normalizedQuery));
@@ -623,7 +768,7 @@ class RecipeLibraryController extends ChangeNotifier {
     );
 
     final suggestionsByValue = <String, RecipeSearchSuggestion>{};
-    for (final recipe in _latestRecipes) {
+    for (final recipe in _activeRecipes) {
       _addSuggestion(
         suggestionsByValue,
         recipe.title,

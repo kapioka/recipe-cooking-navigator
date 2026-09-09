@@ -10,6 +10,7 @@ import 'package:recipe_cooking_navigator/data/cooking_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_document_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_inbox_state_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_tag_store.dart';
+import 'package:recipe_cooking_navigator/data/recipe_version_state_store.dart';
 import 'package:recipe_cooking_navigator/domain/recipe_inbox.dart';
 import 'package:recipe_cooking_navigator/domain/recipe_validator.dart';
 import 'package:recipe_cooking_navigator/main.dart';
@@ -69,6 +70,85 @@ void main() {
     expect(find.text('豚こま切れ肉'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('全体工程'), 300);
     expect(find.text('全体工程'), findsOneWidget);
+  });
+
+  testWidgets('shows version history and uses the selected active revision', (
+    tester,
+  ) async {
+    final revisionOne = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final revisionTwo = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final recipeTwo = revisionTwo['recipe'] as Map<String, dynamic>;
+    recipeTwo['revision'] = 2;
+    recipeTwo['parent_revision'] = 1;
+    recipeTwo['title'] = '豚の生姜焼き 改良版';
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final firstStepId =
+        ((((revisionOne['recipe'] as Map<String, dynamic>)['stages'] as List)
+                            .first
+                        as Map<String, dynamic>)['steps']
+                    as List)
+                .cast<Map<String, dynamic>>()
+                .first['id']
+            as String;
+    final cookingStore = CookingStore();
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne, revisionTwo]),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => null,
+      cookingStore: cookingStore,
+      recipeVersionStateStore: MemoryRecipeVersionStateStore({recipeId: 1}),
+    );
+    await controller.load();
+    await cookingStore.savePosition(recipeId, 1, firstStepId, restart: true);
+    await cookingStore.markHelpSeen();
+    await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
+    expect(find.textContaining('Active Version 1'), findsOneWidget);
+    await tester.tap(find.text('豚の生姜焼き'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Active Version 1'), findsOneWidget);
+    expect(find.text('Latest Version 2'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('open_version_history')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Version履歴'), findsOneWidget);
+    expect(find.byKey(const Key('recipe_revision_2')), findsOneWidget);
+    expect(find.byKey(const Key('recipe_revision_1')), findsOneWidget);
+    expect(find.text('Version 1から派生'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('activate_revision_2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm_activate_revision_2')));
+    await tester.pumpAndSettle();
+
+    expect(controller.activeRecipeFor(recipeId)?.revision, 2);
+    var progress = (await cookingStore.read())['progress'] as Map;
+    expect((progress[recipeId] as Map)['revision'], 1);
+    await tester.tap(find.byTooltip('戻る'));
+    await tester.pumpAndSettle();
+    expect(find.text('豚の生姜焼き 改良版'), findsOneWidget);
+    expect(find.text('Active Version 2'), findsOneWidget);
+    expect(find.text('Latest Version 2'), findsNothing);
+    expect(find.text('調理途中です・Version 1'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('resume_cooking')));
+    await tester.pumpAndSettle();
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
+    expect(find.text('豚の生姜焼き 改良版'), findsNothing);
+    await tester.tap(find.byTooltip('調理を中断'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('中断する'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('start_cooking')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm_restart_cooking')));
+    await tester.pumpAndSettle();
+    progress = (await cookingStore.read())['progress'] as Map;
+    expect((progress[recipeId] as Map)['revision'], 2);
   });
 
   testWidgets('shows attribution and food safety notice', (tester) async {
@@ -463,7 +543,10 @@ void main() {
 }
 
 class _MemoryRecipeDocumentStore implements RecipeDocumentStore {
-  final List<Map<String, dynamic>> documents = [];
+  _MemoryRecipeDocumentStore([List<Map<String, dynamic>>? initial])
+    : documents = [...?initial];
+
+  final List<Map<String, dynamic>> documents;
 
   @override
   Future<List<Map<String, dynamic>>> loadDocuments() async => [...documents];

@@ -339,6 +339,8 @@ Inbox確認中も単一ファイル取込ボタンを利用可能とする。Inb
 
 新しいVersionを取り込んだ場合は通常active候補とするが、過去Versionをいつでもactiveへ戻せる。
 
+activeを明示していないRecipeはlatestを通常表示・調理に使う。ユーザーがactiveを明示した後に新しいVersionを取り込んだ場合は、その選択を維持し、新しいVersionをlatest候補としてVersion履歴へ表示する。activeの切替は既存の調理途中位置を別Versionへ付け替えない。
+
 任意の過去VersionからChatGPTへ再調整を依頼できる。新しいRevisionは、必要に応じて`parent_revision`でどのVersionをベースに作ったかを保持する。
 
 ## 17. 外部SNS共有

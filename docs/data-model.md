@@ -89,6 +89,10 @@ Revision 3 = active
 
 ユーザーは過去Revisionを`active`へ戻せる。新しいRevisionを取り込んでも、過去Revisionは削除しない。
 
+端末内ではRecipe documentとは別の`recipe-version-state-v1.json`に、Recipe IDごとの明示的な`active_revision`だけを保存する。既存データなどで明示状態がないRecipeは`latest_revision`をeffective activeとして扱い、従来の表示・調理動作を維持する。
+
+ユーザーが一度activeを明示したRecipeへ新しいRevisionを取り込んだ場合、その選択を勝手に変更しない。新しいRevisionは`latest`として履歴へ追加し、ユーザーが確認してactiveへ切り替えられる候補とする。active切替ではRecipe document、過去Revision、Cook Session、既存の調理途中位置を書き換えない。保存先に存在しないRecipe ID / revisionはactiveに設定しない。
+
 ## 6. Quantity
 
 料理では`1/2個`、`少々`、`2〜3振り`など機械値だけで表せない量がある。

@@ -59,7 +59,7 @@
 - [ ] 調理雑音下の誤認識結果を反映した追加挙動を確定
 - [ ] 音声読み上げ文の組み立てルールを確定
 - [ ] Recipe import時の確認画面を確定
-- [ ] Version履歴画面とactive切替UIを確定
+- [x] Version履歴画面とactive切替UIを確定
 - [ ] 評価画面の入力項目と省略可能項目を確定
 - [ ] SNS共有プレビュー画面を確定
 - [ ] ポータブルRecipeファイルの拡張子・MIME type・内容を決定
@@ -100,11 +100,11 @@
 - [x] ローカル保存
 - [x] Recipe ID単位のVersion履歴保存
 - [x] latest Revision管理
-- [ ] active Revision管理
-- [ ] 過去Versionをactiveへ戻す
+- [x] active Revision管理
+- [x] 過去Versionをactiveへ戻す
 - [x] 同一Revision重複importの扱いを決定・実装（同一内容はno-op、異なる内容は拒否）
 
-### Next implementation unit — Google Drive Recipe Inbox
+### Google Drive Recipe Inbox
 
 Google Driveをクラウド同期ではなく、WorkからアプリへRecipeファイルを渡す任意の手動受信箱として使う。
 
@@ -141,7 +141,7 @@ Google Driveをクラウド同期ではなく、WorkからアプリへRecipeフ�
 - [ ] 事前準備チェック
 - [x] 想定調理時間
 - [x] AI想定難易度
-- [ ] active Version表示
+- [x] active Version表示
 
 ### Cooking mode
 
@@ -200,8 +200,8 @@ Google Driveをクラウド同期ではなく、WorkからアプリへRecipeフ�
 - [ ] 選択した過去VersionのsnapshotをFeedbackへ含める
 - [ ] SharesheetからChatGPTへ共有
 - [x] 修正版Recipeの再importと複数Revision保持
-- [ ] `parent_revision`を使った履歴表示
-- [ ] 新Versionをactive候補にする
+- [x] `parent_revision`を使った履歴表示
+- [x] 新Versionをactive候補にする
 - [ ] 過去Versionから再調整する操作
 
 ## Phase 3 — External sharing

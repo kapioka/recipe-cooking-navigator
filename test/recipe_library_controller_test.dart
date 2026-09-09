@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_cooking_navigator/application/recipe_library_controller.dart';
 import 'package:recipe_cooking_navigator/data/recipe_document_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_tag_store.dart';
+import 'package:recipe_cooking_navigator/data/recipe_version_state_store.dart';
 import 'package:recipe_cooking_navigator/domain/recipe_validator.dart';
 
 void main() {
@@ -38,6 +39,139 @@ void main() {
 
     expect(controller.recipes, hasLength(1));
     expect(controller.recipes.single.revision, 2);
+  });
+
+  test('loads an older active revision separately from latest', () async {
+    final revisionTwo = _revisionFrom(revisionOne, 2, parentRevision: 1);
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne, revisionTwo]),
+      _MemoryRecipeTagStore(),
+      validator,
+      () async => null,
+      recipeVersionStateStore: MemoryRecipeVersionStateStore({recipeId: 1}),
+    );
+
+    await controller.load();
+
+    expect(controller.recipes.single.revision, 1);
+    expect(controller.latestRecipeFor(recipeId)?.revision, 2);
+    expect(controller.revisionsFor(recipeId).map((recipe) => recipe.revision), [
+      2,
+      1,
+    ]);
+  });
+
+  test(
+    'persists an active switch and keeps it when a newer version arrives',
+    () async {
+      final revisionTwo = _revisionFrom(revisionOne, 2, parentRevision: 1);
+      final revisionThree = _revisionFrom(revisionOne, 3, parentRevision: 1);
+      final recipeId =
+          (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+      final documentStore = _MemoryRecipeDocumentStore([
+        revisionOne,
+        revisionTwo,
+      ]);
+      final versionStore = MemoryRecipeVersionStateStore();
+      final controller = RecipeLibraryController(
+        documentStore,
+        _MemoryRecipeTagStore(),
+        validator,
+        () async => null,
+        recipeVersionStateStore: versionStore,
+      );
+      await controller.load();
+
+      final switched = await controller.setActiveRevision(recipeId, 1);
+      expect(switched.status, ActiveRevisionUpdateStatus.updated);
+      expect(controller.activeRecipeFor(recipeId)?.revision, 1);
+
+      await controller.importSource(jsonEncode(revisionThree));
+      expect(controller.latestRecipeFor(recipeId)?.revision, 3);
+      expect(controller.activeRecipeFor(recipeId)?.revision, 1);
+
+      final reopened = RecipeLibraryController(
+        documentStore,
+        _MemoryRecipeTagStore(),
+        validator,
+        () async => null,
+        recipeVersionStateStore: versionStore,
+      );
+      await reopened.load();
+      expect(reopened.activeRecipeFor(recipeId)?.revision, 1);
+    },
+  );
+
+  test('does not persist a missing active revision', () async {
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final versionStore = MemoryRecipeVersionStateStore();
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne]),
+      _MemoryRecipeTagStore(),
+      validator,
+      () async => null,
+      recipeVersionStateStore: versionStore,
+    );
+    await controller.load();
+
+    final result = await controller.setActiveRevision(recipeId, 99);
+
+    expect(result.status, ActiveRevisionUpdateStatus.notFound);
+    expect(await versionStore.loadActiveRevisions(), isEmpty);
+    expect(controller.activeRecipeFor(recipeId)?.revision, 1);
+  });
+
+  test('falls back to latest without rewriting a stale active entry', () async {
+    final revisionTwo = _revisionFrom(revisionOne, 2, parentRevision: 1);
+    final revisionNinetyNine = _revisionFrom(
+      revisionOne,
+      99,
+      parentRevision: 2,
+    );
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final versionStore = MemoryRecipeVersionStateStore({recipeId: 99});
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne, revisionTwo]),
+      _MemoryRecipeTagStore(),
+      validator,
+      () async => null,
+      recipeVersionStateStore: versionStore,
+    );
+
+    await controller.load();
+
+    expect(controller.activeRecipeFor(recipeId)?.revision, 2);
+    expect(controller.loadError, contains('見つからない'));
+    expect(await versionStore.loadActiveRevisions(), {recipeId: 99});
+
+    await controller.importSource(jsonEncode(revisionNinetyNine));
+
+    expect(controller.activeRecipeFor(recipeId)?.revision, 99);
+    expect(controller.loadError, isNull);
+    expect(await versionStore.loadActiveRevisions(), {recipeId: 99});
+  });
+
+  test('keeps the current active revision when persistence fails', () async {
+    final revisionTwo = _revisionFrom(revisionOne, 2, parentRevision: 1);
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne, revisionTwo]),
+      _MemoryRecipeTagStore(),
+      validator,
+      () async => null,
+      recipeVersionStateStore: _FailingRecipeVersionStateStore(),
+    );
+    await controller.load();
+
+    final result = await controller.setActiveRevision(recipeId, 1);
+
+    expect(result.status, ActiveRevisionUpdateStatus.failed);
+    expect(controller.activeRecipeFor(recipeId)?.revision, 2);
   });
 
   test('does not save a malformed recipe selected from a file', () async {
@@ -163,6 +297,18 @@ void main() {
   });
 }
 
+Map<String, dynamic> _revisionFrom(
+  Map<String, dynamic> source,
+  int revision, {
+  required int parentRevision,
+}) {
+  final copy = jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+  final recipe = copy['recipe'] as Map<String, dynamic>;
+  recipe['revision'] = revision;
+  recipe['parent_revision'] = parentRevision;
+  return copy;
+}
+
 class _MemoryRecipeDocumentStore implements RecipeDocumentStore {
   _MemoryRecipeDocumentStore([List<Map<String, dynamic>>? initial])
     : documents = [...?initial];
@@ -201,5 +347,15 @@ class _MemoryRecipeTagStore implements RecipeTagStore {
     } else {
       tagsByRecipeId[recipeId] = [...tags];
     }
+  }
+}
+
+class _FailingRecipeVersionStateStore implements RecipeVersionStateStore {
+  @override
+  Future<Map<String, int>> loadActiveRevisions() async => const {};
+
+  @override
+  Future<void> saveActiveRevision(String recipeId, int revision) {
+    throw const RecipeVersionStateStorageException('保存に失敗しました。');
   }
 }
