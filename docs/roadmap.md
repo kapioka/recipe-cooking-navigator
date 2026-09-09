@@ -111,23 +111,23 @@ Google Driveをクラウド同期ではなく、WorkからアプリへRecipeフ�
 - [x] 初期スコープと一方向データフローを仕様化
 - [x] 重複、競合、不正ファイル、取込結果の処理契約を仕様化
 - [x] Drive文書IDと内容SHA-256を含む端末内取込記録を仕様化
-- [ ] Androidのシステムフォルダ選択で`Recipe Cooking Navigator/Inbox`を接続
-- [ ] フォルダアクセス権を端末内に保持し、失効時に安全な再選択を案内
-- [ ] ホームへ`新しいレシピを確認`ボタンを追加
-- [ ] 既存の`ChatGPTレシピを取り込む`単一ファイル取込を独立したバックアップ導線として維持
-- [ ] Inbox未設定、権限失効、provider / 通信 / Work障害時も単一ファイル取込を利用可能にする
-- [ ] 単一ファイル取込とInbox取込を同じSchema検証・重複判定・Recipe保存処理へ合流
-- [ ] Inbox直下の`.json`ファイルを手動で非再帰一括走査
-- [ ] 各ファイルを独立してparse・Schema検証し、正常ファイルだけ保存
-- [ ] 同一内容をスキップし、同一Recipe ID・revisionの内容違いを拒否
-- [ ] 取込、保存済みスキップ、拒否の件数とファイル別結果を表示
-- [ ] 取込後もInboxファイルを削除、移動、名前変更、上書きしない
-- [ ] 取込記録をRecipe / Feedbackとは別の端末内JSONへ永続化
-- [ ] Work → アプリだけとし、Feedback Outboxを追加しない
-- [ ] Google Drive API、独自OAuth、スプレッドシート、SQLを追加しない
-- [ ] 複数正常ファイル、正常＋不正混在、保存済み重複、競合Revision、権限失効、再起動後再確認のテスト
-- [ ] Work / Inbox障害中の単一ファイル取込と、両経路間の重複・競合回帰テスト
-- [ ] 実機でアプリ起動前、起動中、終了後の`accelerometer_rotation` / `user_rotation`が同一であることを確認
+- [x] Androidのシステムフォルダ選択で`Recipe Cooking Navigator/Inbox`を接続
+- [x] フォルダアクセス権を端末内に保持し、失効時に安全な再選択を案内
+- [x] ホームへ`新しいレシピを確認`ボタンを追加
+- [x] 既存の`ChatGPTレシピを取り込む`単一ファイル取込を独立したバックアップ導線として維持
+- [x] Inbox未設定、権限失効、provider / 通信 / Work障害時も単一ファイル取込を利用可能にする
+- [x] 単一ファイル取込とInbox取込を同じSchema検証・重複判定・Recipe保存処理へ合流
+- [x] Inbox直下の`.json`ファイルを手動で非再帰一括走査
+- [x] 各ファイルを独立してparse・Schema検証し、正常ファイルだけ保存
+- [x] 同一内容をスキップし、同一Recipe ID・revisionの内容違いを拒否
+- [x] 取込、保存済みスキップ、拒否の件数とファイル別結果を表示
+- [x] 取込後もInboxファイルを削除、移動、名前変更、上書きしない
+- [x] 取込記録をRecipe / Feedbackとは別の端末内JSONへ永続化
+- [x] Work → アプリだけとし、Feedback Outboxを追加しない
+- [x] Google Drive API、独自OAuth、スプレッドシート、SQLを追加しない
+- [x] 複数正常ファイル、正常＋不正混在、保存済み重複、競合Revision、権限失効、再起動後再確認のテスト
+- [x] Work / Inbox障害中の単一ファイル取込と、両経路間の重複・競合回帰テスト
+- [x] 実機でアプリ起動前、起動中、終了後の`accelerometer_rotation` / `user_rotation`が同一であることを確認
 
 ### Pre-cook view
 

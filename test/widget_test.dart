@@ -7,7 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_cooking_navigator/application/recipe_library_controller.dart';
 import 'package:recipe_cooking_navigator/data/cooking_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_document_store.dart';
+import 'package:recipe_cooking_navigator/data/recipe_inbox_state_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_tag_store.dart';
+import 'package:recipe_cooking_navigator/domain/recipe_inbox.dart';
 import 'package:recipe_cooking_navigator/domain/recipe_validator.dart';
 import 'package:recipe_cooking_navigator/main.dart';
 
@@ -136,6 +138,43 @@ void main() {
     await tester.pump();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
     expect(find.text('タグ'), findsOneWidget);
+  });
+
+  testWidgets('selects an Inbox and shows per-file import results', (
+    tester,
+  ) async {
+    final inboxStateStore = _WidgetRecipeInboxStateStore();
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore(),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => null,
+      recipeInboxPlatform: _WidgetRecipeInboxPlatform(
+        RecipeInboxFile(
+          documentId: 'widget-document',
+          name: 'recipe.json',
+          source: recipeSource,
+          sha256: 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        ),
+      ),
+      recipeInboxStateStore: inboxStateStore,
+    );
+    await controller.load();
+    await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+
+    await tester.tap(find.byKey(const Key('check_recipe_inbox_button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Inboxフォルダを選択'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('confirm_select_inbox_folder')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Inboxの確認結果'), findsOneWidget);
+    expect(find.text('1件取り込み、0件保存済み、0件拒否しました。'), findsOneWidget);
+    expect(find.text('recipe.json'), findsOneWidget);
+    await tester.tap(find.text('閉じる'));
+    await tester.pumpAndSettle();
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
   });
 
   testWidgets('navigates, resumes, times, and explicitly completes cooking', (
@@ -405,5 +444,42 @@ class _MemoryRecipeTagStore implements RecipeTagStore {
     } else {
       tagsByRecipeId[recipeId] = [...tags];
     }
+  }
+}
+
+class _WidgetRecipeInboxPlatform implements RecipeInboxPlatform {
+  _WidgetRecipeInboxPlatform(this.file);
+
+  final RecipeInboxFile file;
+
+  @override
+  Future<List<RecipeInboxFile>> readFiles(RecipeInboxFolder folder) async => [
+    file,
+  ];
+
+  @override
+  Future<RecipeInboxFolder?> selectFolder() async => const RecipeInboxFolder(
+    treeUri: 'content://provider/tree/inbox',
+    displayName: 'Inbox',
+  );
+}
+
+class _WidgetRecipeInboxStateStore implements RecipeInboxStateStore {
+  RecipeInboxState state = RecipeInboxState.empty;
+
+  @override
+  Future<void> addReceipts(Iterable<RecipeInboxReceipt> receipts) async {
+    state = RecipeInboxState(
+      folder: state.folder,
+      receipts: [...state.receipts, ...receipts],
+    );
+  }
+
+  @override
+  Future<RecipeInboxState> load() async => state;
+
+  @override
+  Future<void> saveFolder(RecipeInboxFolder folder) async {
+    state = RecipeInboxState(folder: folder, receipts: state.receipts);
   }
 }
