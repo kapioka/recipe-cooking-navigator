@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -261,6 +262,174 @@ void main() {
       expect(controller.recipes, hasLength(1));
     },
   );
+
+  test('coalesces concurrent Inbox checks', () async {
+    final pendingFiles = Completer<List<RecipeInboxFile>>();
+    final platform = _DelayedRecipeInboxPlatform(pendingFiles.future);
+    final controller = _controller(
+      validator,
+      _MemoryRecipeDocumentStore(),
+      platform,
+      _MemoryRecipeInboxStateStore.withFolder(),
+      recipeSource,
+    );
+    await controller.load();
+
+    final first = controller.checkInbox();
+    final second = controller.checkInbox();
+
+    expect(identical(first, second), isTrue);
+    expect(controller.isCheckingInbox, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(platform.readCount, 1);
+
+    pendingFiles.complete(const <RecipeInboxFile>[]);
+    expect((await first).status, RecipeInboxRunStatus.completed);
+    expect((await second).status, RecipeInboxRunStatus.completed);
+    expect(controller.isCheckingInbox, isFalse);
+  });
+
+  test('keeps single-file import available while Inbox read is pending', () async {
+    final pendingFiles = Completer<List<RecipeInboxFile>>();
+    final documentStore = _MemoryRecipeDocumentStore();
+    final stateStore = _MemoryRecipeInboxStateStore.withFolder();
+    final controller = _controller(
+      validator,
+      documentStore,
+      _DelayedRecipeInboxPlatform(pendingFiles.future),
+      stateStore,
+      recipeSource,
+    );
+    await controller.load();
+
+    final inboxRun = controller.checkInbox();
+    expect(controller.isCheckingInbox, isTrue);
+    final fileResult = await controller.importFromFile();
+
+    expect(fileResult.status, RecipeImportStatus.imported);
+    pendingFiles.complete(<RecipeInboxFile>[
+      RecipeInboxFile(
+        documentId: 'pending-inbox-document',
+        name: 'recipe.json',
+        source: recipeSource,
+        sha256:
+            'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+      ),
+    ]);
+    final inboxResult = await inboxRun;
+
+    expect(inboxResult.skippedCount, 1);
+    expect(documentStore.documents, hasLength(1));
+    expect(stateStore.state.receipts, hasLength(1));
+  });
+
+  test(
+    'reimports when a receipt points to a missing recipe revision',
+    () async {
+      const receipt = RecipeInboxReceipt(
+        documentId: 'stale-document',
+        sha256:
+            'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        recipeId: 'missing-recipe',
+        revision: 1,
+      );
+      final stateStore = _MemoryRecipeInboxStateStore.withState(
+        const RecipeInboxState(
+          folder: RecipeInboxFolder(
+            treeUri: 'content://provider/tree/inbox',
+            displayName: 'Inbox',
+          ),
+          receipts: <RecipeInboxReceipt>[receipt],
+        ),
+      );
+      final documentStore = _MemoryRecipeDocumentStore();
+      final controller = _controller(
+        validator,
+        documentStore,
+        _FakeRecipeInboxPlatform(
+          files: <RecipeInboxFile>[
+            RecipeInboxFile(
+              documentId: receipt.documentId,
+              name: 'recipe.json',
+              source: recipeSource,
+              sha256: receipt.sha256,
+            ),
+          ],
+        ),
+        stateStore,
+        recipeSource,
+      );
+      await controller.load();
+
+      final result = await controller.checkInbox();
+
+      expect(result.importedCount, 1);
+      expect(documentStore.documents, hasLength(1));
+      expect(stateStore.state.receipts, hasLength(1));
+      expect(stateStore.state.receipts.single.recipeId, 'ginger-pork-001');
+    },
+  );
+
+  test('rejects malformed file metadata without poisoning receipts', () async {
+    final stateStore = _MemoryRecipeInboxStateStore.withFolder();
+    final controller = _controller(
+      validator,
+      _MemoryRecipeDocumentStore(),
+      _FakeRecipeInboxPlatform(
+        files: <RecipeInboxFile>[
+          RecipeInboxFile(
+            documentId: 'bad-hash-document',
+            name: 'bad-hash.json',
+            source: recipeSource,
+            sha256: 'NOT-A-SHA256',
+          ),
+        ],
+      ),
+      stateStore,
+      recipeSource,
+    );
+    await controller.load();
+
+    final result = await controller.checkInbox();
+
+    expect(result.rejectedCount, 1);
+    expect(stateStore.state.receipts, isEmpty);
+  });
+
+  test('releases the prior folder only after saving its replacement', () async {
+    const previousFolder = RecipeInboxFolder(
+      treeUri: 'content://provider/tree/old-inbox',
+      displayName: 'Inbox',
+    );
+    const replacementFolder = RecipeInboxFolder(
+      treeUri: 'content://provider/tree/new-inbox',
+      displayName: 'Inbox',
+    );
+    final stateStore = _MemoryRecipeInboxStateStore.withState(
+      const RecipeInboxState(
+        folder: previousFolder,
+        receipts: <RecipeInboxReceipt>[],
+      ),
+    );
+    final platform = _FakeRecipeInboxPlatform(
+      files: const <RecipeInboxFile>[],
+      selectedFolder: replacementFolder,
+    );
+    final controller = _controller(
+      validator,
+      _MemoryRecipeDocumentStore(),
+      platform,
+      stateStore,
+      recipeSource,
+    );
+    await controller.load();
+
+    final result = await controller.selectInboxFolder();
+
+    expect(result.status, RecipeInboxFolderSelectionStatus.selected);
+    expect(stateStore.state.folder?.treeUri, replacementFolder.treeUri);
+    expect(platform.releasedFolders, <RecipeInboxFolder>[previousFolder]);
+  });
 }
 
 RecipeLibraryController _controller(
@@ -281,10 +450,19 @@ RecipeLibraryController _controller(
 }
 
 class _FakeRecipeInboxPlatform implements RecipeInboxPlatform {
-  _FakeRecipeInboxPlatform({required this.files, this.readError});
+  _FakeRecipeInboxPlatform({
+    required this.files,
+    this.readError,
+    this.selectedFolder = const RecipeInboxFolder(
+      treeUri: 'content://provider/tree/inbox',
+      displayName: 'Inbox',
+    ),
+  });
 
   final List<RecipeInboxFile> files;
   final RecipeInboxException? readError;
+  final RecipeInboxFolder? selectedFolder;
+  final List<RecipeInboxFolder> releasedFolders = <RecipeInboxFolder>[];
 
   @override
   Future<List<RecipeInboxFile>> readFiles(RecipeInboxFolder folder) async {
@@ -293,6 +471,30 @@ class _FakeRecipeInboxPlatform implements RecipeInboxPlatform {
     }
     return files;
   }
+
+  @override
+  Future<void> releaseFolder(RecipeInboxFolder folder) async {
+    releasedFolders.add(folder);
+  }
+
+  @override
+  Future<RecipeInboxFolder?> selectFolder() async => selectedFolder;
+}
+
+class _DelayedRecipeInboxPlatform implements RecipeInboxPlatform {
+  _DelayedRecipeInboxPlatform(this.pendingFiles);
+
+  final Future<List<RecipeInboxFile>> pendingFiles;
+  int readCount = 0;
+
+  @override
+  Future<List<RecipeInboxFile>> readFiles(RecipeInboxFolder folder) {
+    readCount += 1;
+    return pendingFiles;
+  }
+
+  @override
+  Future<void> releaseFolder(RecipeInboxFolder folder) async {}
 
   @override
   Future<RecipeInboxFolder?> selectFolder() async => const RecipeInboxFolder(
@@ -312,6 +514,8 @@ class _MemoryRecipeInboxStateStore implements RecipeInboxStateStore {
         ),
         receipts: <RecipeInboxReceipt>[],
       );
+
+  _MemoryRecipeInboxStateStore.withState(this.state);
 
   RecipeInboxState state;
 

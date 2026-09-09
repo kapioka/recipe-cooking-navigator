@@ -9,6 +9,9 @@ class AndroidRecipeInboxPlatform implements RecipeInboxPlatform {
 
   final MethodChannel _channel;
 
+  static const _scanTimeout = Duration(seconds: 30);
+  static const _releaseTimeout = Duration(seconds: 10);
+
   @override
   Future<RecipeInboxFolder?> selectFolder() async {
     try {
@@ -29,6 +32,13 @@ class AndroidRecipeInboxPlatform implements RecipeInboxPlatform {
           '選択したInboxフォルダの情報を確認できませんでした。',
         );
       }
+      final parsedTreeUri = Uri.tryParse(treeUri);
+      if (parsedTreeUri == null || parsedTreeUri.scheme != 'content') {
+        throw const RecipeInboxException(
+          'invalid_response',
+          '選択したInboxフォルダの情報を確認できませんでした。',
+        );
+      }
       return RecipeInboxFolder(treeUri: treeUri, displayName: displayName);
     } on PlatformException catch (error) {
       throw _translate(error);
@@ -38,10 +48,17 @@ class AndroidRecipeInboxPlatform implements RecipeInboxPlatform {
   @override
   Future<List<RecipeInboxFile>> readFiles(RecipeInboxFolder folder) async {
     try {
-      final result = await _channel.invokeListMethod<Object?>(
-        'scan',
-        <String, Object?>{'treeUri': folder.treeUri},
-      );
+      final result = await _channel
+          .invokeListMethod<Object?>('scan', <String, Object?>{
+            'treeUri': folder.treeUri,
+          })
+          .timeout(
+            _scanTimeout,
+            onTimeout: () => throw const RecipeInboxException(
+              'timeout',
+              'Inboxの確認が時間内に完了しませんでした。単一ファイル取込を利用できます。',
+            ),
+          );
       return (result ?? const <Object?>[])
           .map((item) {
             if (item is! Map<Object?, Object?>) {
@@ -77,11 +94,35 @@ class AndroidRecipeInboxPlatform implements RecipeInboxPlatform {
     }
   }
 
+  @override
+  Future<void> releaseFolder(RecipeInboxFolder folder) async {
+    try {
+      await _channel
+          .invokeMethod<void>('releaseFolder', <String, Object?>{
+            'treeUri': folder.treeUri,
+          })
+          .timeout(
+            _releaseTimeout,
+            onTimeout: () => throw const RecipeInboxException(
+              'timeout',
+              '以前のInboxフォルダのアクセス権を解除できませんでした。',
+            ),
+          );
+    } on PlatformException catch (error) {
+      throw _translate(error);
+    }
+  }
+
   RecipeInboxException _translate(PlatformException error) {
     final message = switch (error.code) {
       'permission_lost' => 'Inboxフォルダのアクセス権が失われました。もう一度選択してください。',
       'folder_unavailable' => 'Inboxフォルダを読み込めませんでした。接続状態を確認してください。',
       'selection_failed' => 'Inboxフォルダを選択できませんでした。',
+      'unsupported_provider' => 'Google DriveのInboxフォルダを選択してください。',
+      'wrong_folder' => 'Google Drive内の「Inbox」フォルダを選択してください。',
+      'timeout' => 'Inboxの処理が時間内に完了しませんでした。',
+      'cancelled' => 'Inboxの処理を中止しました。',
+      'release_failed' => '以前のInboxフォルダのアクセス権を解除できませんでした。',
       'busy' => 'フォルダ選択の処理中です。',
       _ => 'Inboxを利用できませんでした。もう一度お試しください。',
     };

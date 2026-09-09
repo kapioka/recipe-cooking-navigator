@@ -128,6 +128,10 @@ Google Driveをクラウド同期ではなく、WorkからアプリへRecipeフ�
 - [x] 複数正常ファイル、正常＋不正混在、保存済み重複、競合Revision、権限失効、再起動後再確認のテスト
 - [x] Work / Inbox障害中の単一ファイル取込と、両経路間の重複・競合回帰テスト
 - [x] 実機でアプリ起動前、起動中、終了後の`accelerometer_rotation` / `user_rotation`が同一であることを確認
+- [x] Google Drive providerと`Inbox`フォルダを検証し、以前のフォルダ権限を安全に解除
+- [x] 走査の30秒timeout、100ファイル、1ファイル1 MB、合計5 MBの上限を追加
+- [x] Inbox処理と状態保存を直列化し、古いreceiptからの再取り込みを可能にする
+- [x] Inbox確認中も単一ファイル取込を利用可能にする
 
 ### Pre-cook view
 

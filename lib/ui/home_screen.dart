@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               key: const Key('import_recipe_button'),
-                              onPressed: controller.isBusy
+                              onPressed: controller.isImporting
                                   ? null
                                   : () => _importRecipe(context),
                               icon: controller.isImporting
@@ -124,8 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           IconButton(
                             key: const Key('select_inbox_folder_button'),
-                            tooltip: 'Inboxフォルダを選ぶ',
-                            onPressed: controller.isBusy
+                            tooltip: 'Google Drive / AI / Recipe Cooking Navigator / Inboxを選ぶ',
+                            onPressed: controller.isInboxBusy
                                 ? null
                                 : _selectInboxFolder,
                             icon: const Icon(
@@ -134,6 +134,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
+                      if (controller.inboxFolder case final folder?) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '接続先: Google Drive / ${folder.displayName}',
+                          key: const Key('recipe_inbox_connection'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -236,7 +244,9 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Inboxフォルダを選択'),
-          content: Text(result.message),
+          content: Text(
+            '${result.message}\n\nGoogle Drive / AI / Recipe Cooking Navigator / Inboxを選択してください。',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -298,6 +308,8 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(result.message),
+              const SizedBox(height: 4),
+              const Text('Inbox内のファイルは変更していません。'),
               if (result.files.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 SizedBox(

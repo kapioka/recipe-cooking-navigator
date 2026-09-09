@@ -392,6 +392,8 @@ RecipeInboxState
 - `result`の初期値は`imported`または`already_exists`とし、拒否したファイルはreceiptへ追加しない
 - receiptは対象Recipeの端末内保存に成功した後だけ追加する。receipt保存に失敗した場合も既存RecipeやInboxファイルを削除・上書きしない
 - 同じ`source_document_id`でも内容SHA-256が変化した場合は再検証する。新Revisionなら追加し、同一Recipe ID・revisionの内容違いなら拒否する
+- receiptが一致しても対応するRecipe IDとrevisionが端末内に存在しない場合は、receiptを古い記録として対象ファイルを再検証する
+- フォルダ接続とreceiptのread-modify-writeは直列化し、並行操作で一方の更新を失わない
 - フォルダの再選択で`connection_id`が変わっても、Recipe保存側の重複・競合規則を維持する
 
 Inboxは取込元の追跡情報であり、Recipeの正本、backup、同期状態、処理queueではない。

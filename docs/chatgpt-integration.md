@@ -197,6 +197,8 @@ OpenAI API直接統合はAndroid MVP外。
 
 あるファイルが不正でも他の正常ファイルは処理する。不正データを推測補完せず、不正ファイルを取込済みとして記録しない。
 
+Android側は、選択先がGoogle DriveのDocumentsProviderかつ`Inbox`フォルダであることを検証する。Inbox走査は30秒、100ファイル、1ファイル1 MB、合計5 MBを上限とし、上限超過や不正なSHA-256 metadataを個別ファイルの拒否として扱う。Inbox確認中も既存の単一ファイル取込を利用できる状態に保つ。
+
 初期実装でアプリからInboxへRecipeや状態を書き戻さない。Evaluation、Feedback JSON生成、Feedback Outbox、Work側への返却は後続の実装単位とし、Recipe Inboxへ混在させない。
 
 WorkやInboxが利用できない場合も、既存の`ChatGPTレシピを取り込む`単一ファイル取込をバックアップ導線として使用できるようにする。この経路はGoogle Drive接続やInbox取込記録へ依存せず、ユーザーが明示的にファイルを選択した場合だけ動作する。受信経路が異なってもRecipe JSON契約、Schema検証、重複・競合規則は変えない。

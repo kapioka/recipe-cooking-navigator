@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -175,6 +176,51 @@ void main() {
     await tester.tap(find.text('閉じる'));
     await tester.pumpAndSettle();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
+    expect(find.text('接続先: Google Drive / Inbox'), findsOneWidget);
+  });
+
+  testWidgets('keeps file import enabled while Inbox check is pending', (
+    tester,
+  ) async {
+    final pendingFiles = Completer<List<RecipeInboxFile>>();
+    final inboxStateStore = _WidgetRecipeInboxStateStore(
+      const RecipeInboxState(
+        folder: RecipeInboxFolder(
+          treeUri: 'content://provider/tree/inbox',
+          displayName: 'Inbox',
+        ),
+        receipts: <RecipeInboxReceipt>[],
+      ),
+    );
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore(),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => recipeSource,
+      recipeInboxPlatform: _BlockingWidgetRecipeInboxPlatform(
+        pendingFiles.future,
+      ),
+      recipeInboxStateStore: inboxStateStore,
+    );
+    await controller.load();
+    await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+
+    await tester.tap(find.byKey(const Key('check_recipe_inbox_button')));
+    await tester.pump();
+
+    final importButton = tester.widget<OutlinedButton>(
+      find.byKey(const Key('import_recipe_button')),
+    );
+    expect(importButton.onPressed, isNotNull);
+
+    await tester.tap(find.byKey(const Key('import_recipe_button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
+
+    pendingFiles.complete(const <RecipeInboxFile>[]);
+    await tester.pumpAndSettle();
+    expect(find.text('Inboxの確認結果'), findsOneWidget);
   });
 
   testWidgets('navigates, resumes, times, and explicitly completes cooking', (
@@ -458,14 +504,35 @@ class _WidgetRecipeInboxPlatform implements RecipeInboxPlatform {
   ];
 
   @override
+  Future<void> releaseFolder(RecipeInboxFolder folder) async {}
+
+  @override
   Future<RecipeInboxFolder?> selectFolder() async => const RecipeInboxFolder(
     treeUri: 'content://provider/tree/inbox',
     displayName: 'Inbox',
   );
 }
 
+class _BlockingWidgetRecipeInboxPlatform implements RecipeInboxPlatform {
+  _BlockingWidgetRecipeInboxPlatform(this.pendingFiles);
+
+  final Future<List<RecipeInboxFile>> pendingFiles;
+
+  @override
+  Future<List<RecipeInboxFile>> readFiles(RecipeInboxFolder folder) =>
+      pendingFiles;
+
+  @override
+  Future<void> releaseFolder(RecipeInboxFolder folder) async {}
+
+  @override
+  Future<RecipeInboxFolder?> selectFolder() async => null;
+}
+
 class _WidgetRecipeInboxStateStore implements RecipeInboxStateStore {
-  RecipeInboxState state = RecipeInboxState.empty;
+  _WidgetRecipeInboxStateStore([this.state = RecipeInboxState.empty]);
+
+  RecipeInboxState state;
 
   @override
   Future<void> addReceipts(Iterable<RecipeInboxReceipt> receipts) async {

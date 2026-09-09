@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -31,11 +32,11 @@ class RecipeInboxReceipt {
     final recipeId = json['recipe_id'];
     final revision = json['revision'];
     if (documentId is! String ||
-        documentId.isEmpty ||
+        documentId.trim().isEmpty ||
         sha256 is! String ||
-        !RegExp(r'^[a-f0-9]{64}$').hasMatch(sha256) ||
+        !isValidRecipeInboxSha256(sha256) ||
         recipeId is! String ||
-        recipeId.isEmpty ||
+        recipeId.trim().isEmpty ||
         revision is! int ||
         revision < 1) {
       throw const FormatException('Invalid inbox receipt.');
@@ -85,12 +86,15 @@ class FileRecipeInboxStateStore implements RecipeInboxStateStore {
   static const storageVersion = 1;
 
   final File file;
+  Future<void> _operationTail = Future<void>.value();
 
   File get _backupFile => File('${file.path}.bak');
   File get _temporaryFile => File('${file.path}.tmp');
 
   @override
-  Future<RecipeInboxState> load() async {
+  Future<RecipeInboxState> load() => _synchronized(_loadUnlocked);
+
+  Future<RecipeInboxState> _loadUnlocked() async {
     final source = await _readableSource();
     if (source == null) {
       return RecipeInboxState.empty;
@@ -136,27 +140,71 @@ class FileRecipeInboxStateStore implements RecipeInboxStateStore {
   }
 
   @override
-  Future<void> saveFolder(RecipeInboxFolder folder) async {
-    final current = await load();
+  Future<void> saveFolder(RecipeInboxFolder folder) => _synchronized(() async {
+    _validateFolder(folder);
+    final current = await _loadUnlocked();
     await _write(RecipeInboxState(folder: folder, receipts: current.receipts));
-  }
+  });
 
   @override
-  Future<void> addReceipts(Iterable<RecipeInboxReceipt> receipts) async {
-    final additions = receipts.toList(growable: false);
-    if (additions.isEmpty) {
-      return;
+  Future<void> addReceipts(Iterable<RecipeInboxReceipt> receipts) =>
+      _synchronized(() async {
+        final additions = receipts.toList(growable: false);
+        if (additions.isEmpty) {
+          return;
+        }
+        for (final receipt in additions) {
+          _validateReceipt(receipt);
+        }
+        final current = await _loadUnlocked();
+        final byKey = <String, RecipeInboxReceipt>{
+          for (final receipt in current.receipts) receipt.contentKey: receipt,
+        };
+        for (final receipt in additions) {
+          byKey[receipt.contentKey] = receipt;
+        }
+        await _write(
+          RecipeInboxState(
+            folder: current.folder,
+            receipts: byKey.values.toList(),
+          ),
+        );
+      });
+
+  void _validateFolder(RecipeInboxFolder folder) {
+    final uri = Uri.tryParse(folder.treeUri);
+    if (uri == null ||
+        uri.scheme != 'content' ||
+        folder.displayName.trim().isEmpty) {
+      throw const RecipeInboxStateStorageException(
+        'Inboxフォルダの情報が不正なため保存しませんでした。',
+      );
     }
-    final current = await load();
-    final byKey = <String, RecipeInboxReceipt>{
-      for (final receipt in current.receipts) receipt.contentKey: receipt,
-    };
-    for (final receipt in additions) {
-      byKey[receipt.contentKey] = receipt;
+  }
+
+  void _validateReceipt(RecipeInboxReceipt receipt) {
+    if (receipt.documentId.trim().isEmpty ||
+        !isValidRecipeInboxSha256(receipt.sha256) ||
+        receipt.recipeId.trim().isEmpty ||
+        receipt.revision < 1) {
+      throw const RecipeInboxStateStorageException(
+        'Inboxの取込記録が不正なため保存しませんでした。',
+      );
     }
-    await _write(
-      RecipeInboxState(folder: current.folder, receipts: byKey.values.toList()),
-    );
+  }
+
+  Future<T> _synchronized<T>(Future<T> Function() action) {
+    final previous = _operationTail;
+    final release = Completer<void>();
+    _operationTail = release.future;
+    return () async {
+      await previous;
+      try {
+        return await action();
+      } finally {
+        release.complete();
+      }
+    }();
   }
 
   Future<File?> _readableSource() async {

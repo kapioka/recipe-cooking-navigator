@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/cooking_store.dart';
@@ -126,6 +128,10 @@ class RecipeLibraryController extends ChangeNotifier {
   String _searchQuery = '';
   bool _isImporting = false;
   bool _isCheckingInbox = false;
+  bool _isSelectingInboxFolder = false;
+  Future<RecipeInboxRunResult>? _activeInboxCheck;
+  Future<void> _recipeSaveTail = Future<void>.value();
+  RecipeInboxFolder? _inboxFolder;
   String? _loadError;
 
   List<RecipeDocument> get recipes => _visibleRecipes;
@@ -134,7 +140,10 @@ class RecipeLibraryController extends ChangeNotifier {
   List<RecipeSearchSuggestion> get searchSuggestions => _searchSuggestions;
   bool get isImporting => _isImporting;
   bool get isCheckingInbox => _isCheckingInbox;
-  bool get isBusy => _isImporting || _isCheckingInbox;
+  bool get isSelectingInboxFolder => _isSelectingInboxFolder;
+  bool get isInboxBusy => _isCheckingInbox || _isSelectingInboxFolder;
+  bool get isBusy => _isImporting || isInboxBusy;
+  RecipeInboxFolder? get inboxFolder => _inboxFolder;
   String? get loadError => _loadError;
 
   List<String> tagsFor(String recipeId) {
@@ -171,6 +180,19 @@ class RecipeLibraryController extends ChangeNotifier {
       _loadError = error is RecipeTagStorageException
           ? error.message
           : '保存済みタグを読み込めませんでした。';
+    }
+
+    final inboxStateStore = _recipeInboxStateStore;
+    if (inboxStateStore != null) {
+      try {
+        _inboxFolder = (await inboxStateStore.load()).folder;
+      } on RecipeInboxStateStorageException catch (error) {
+        _inboxFolder = null;
+        _loadError ??= error.message;
+      } catch (_) {
+        _inboxFolder = null;
+        _loadError ??= 'Inboxの接続情報を読み込めませんでした。';
+      }
     }
     notifyListeners();
   }
@@ -212,10 +234,17 @@ class RecipeLibraryController extends ChangeNotifier {
         'この端末ではInboxフォルダを選択できません。',
       );
     }
+    if (isInboxBusy) {
+      return const RecipeInboxFolderSelectionResult(
+        RecipeInboxFolderSelectionStatus.failed,
+        'Inboxの処理中です。完了してからフォルダを選択してください。',
+      );
+    }
 
-    _isCheckingInbox = true;
+    _isSelectingInboxFolder = true;
     notifyListeners();
     try {
+      final previousFolder = (await stateStore.load()).folder;
       final folder = await platform.selectFolder();
       if (folder == null) {
         return const RecipeInboxFolderSelectionResult(
@@ -224,9 +253,23 @@ class RecipeLibraryController extends ChangeNotifier {
         );
       }
       await stateStore.saveFolder(folder);
+      _inboxFolder = folder;
+
+      String? releaseWarning;
+      if (previousFolder != null && previousFolder.treeUri != folder.treeUri) {
+        try {
+          await platform.releaseFolder(previousFolder);
+        } on RecipeInboxException catch (error) {
+          releaseWarning = error.message;
+        } catch (_) {
+          releaseWarning = '以前のInboxフォルダのアクセス権を解除できませんでした。';
+        }
+      }
       return RecipeInboxFolderSelectionResult(
         RecipeInboxFolderSelectionStatus.selected,
-        '「${folder.displayName}」をInboxとして接続しました。',
+        releaseWarning == null
+            ? 'Google Driveの「${folder.displayName}」をInboxとして接続しました。'
+            : 'Google Driveの「${folder.displayName}」を接続しました。\n$releaseWarning',
       );
     } on RecipeInboxException catch (error) {
       return RecipeInboxFolderSelectionResult(
@@ -244,12 +287,38 @@ class RecipeLibraryController extends ChangeNotifier {
         'Inboxフォルダを接続できませんでした。',
       );
     } finally {
-      _isCheckingInbox = false;
+      _isSelectingInboxFolder = false;
       notifyListeners();
     }
   }
 
-  Future<RecipeInboxRunResult> checkInbox() async {
+  Future<RecipeInboxRunResult> checkInbox() {
+    final active = _activeInboxCheck;
+    if (active != null) {
+      return active;
+    }
+    if (_isSelectingInboxFolder) {
+      return Future<RecipeInboxRunResult>.value(
+        const RecipeInboxRunResult(
+          status: RecipeInboxRunStatus.failed,
+          message: 'Inboxフォルダの選択中です。完了してから確認してください。',
+        ),
+      );
+    }
+
+    final operation = _checkInboxOnce();
+    _activeInboxCheck = operation;
+    unawaited(
+      operation.whenComplete(() {
+        if (identical(_activeInboxCheck, operation)) {
+          _activeInboxCheck = null;
+        }
+      }),
+    );
+    return operation;
+  }
+
+  Future<RecipeInboxRunResult> _checkInboxOnce() async {
     final platform = _recipeInboxPlatform;
     final stateStore = _recipeInboxStateStore;
     if (platform == null || stateStore == null) {
@@ -265,16 +334,18 @@ class RecipeLibraryController extends ChangeNotifier {
       final state = await stateStore.load();
       final folder = state.folder;
       if (folder == null) {
+        _inboxFolder = null;
         return const RecipeInboxRunResult(
           status: RecipeInboxRunStatus.folderSelectionRequired,
           message: '最初にGoogle DriveのInboxフォルダを選択してください。',
         );
       }
+      _inboxFolder = folder;
 
       final inboxFiles = await platform.readFiles(folder);
-      final receiptKeys = state.receipts
-          .map((receipt) => receipt.contentKey)
-          .toSet();
+      final receiptsByKey = <String, RecipeInboxReceipt>{
+        for (final receipt in state.receipts) receipt.contentKey: receipt,
+      };
       final newReceipts = <RecipeInboxReceipt>[];
       final fileResults = <RecipeInboxFileResult>[];
 
@@ -291,7 +362,9 @@ class RecipeLibraryController extends ChangeNotifier {
         }
 
         final contentKey = '${inboxFile.documentId}\u0000${inboxFile.sha256}';
-        if (receiptKeys.contains(contentKey)) {
+        final priorReceipt = receiptsByKey[contentKey];
+        if (priorReceipt != null &&
+            revisionFor(priorReceipt.recipeId, priorReceipt.revision) != null) {
           fileResults.add(
             RecipeInboxFileResult(
               fileName: inboxFile.name,
@@ -339,7 +412,7 @@ class RecipeLibraryController extends ChangeNotifier {
             recipeId: outcome.document.id,
             revision: outcome.document.revision,
           );
-          receiptKeys.add(receipt.contentKey);
+          receiptsByKey[receipt.contentKey] = receipt;
           newReceipts.add(receipt);
         } on RecipeImportException catch (error) {
           fileResults.add(
@@ -373,6 +446,8 @@ class RecipeLibraryController extends ChangeNotifier {
         await stateStore.addReceipts(newReceipts);
       } on RecipeInboxStateStorageException catch (error) {
         receiptWarning = error.message;
+      } catch (_) {
+        receiptWarning = 'Inboxの取込記録を保存できませんでした。レシピ本体は保持しています。';
       }
 
       final provisional = RecipeInboxRunResult(
@@ -390,6 +465,9 @@ class RecipeLibraryController extends ChangeNotifier {
         files: provisional.files,
       );
     } on RecipeInboxException catch (error) {
+      if (error.requiresFolderSelection) {
+        _inboxFolder = null;
+      }
       return RecipeInboxRunResult(
         status: error.requiresFolderSelection
             ? RecipeInboxRunStatus.folderSelectionRequired
@@ -436,15 +514,30 @@ class RecipeLibraryController extends ChangeNotifier {
     }
   }
 
-  Future<_RecipeSaveOutcome> _saveSource(String source) async {
-    final document = _validator.validateSource(source);
-    final storeResult = await _store.saveDocument(document.raw);
-    if (storeResult == StoreRecipeResult.added) {
-      _documents = [..._documents, document];
-      _rebuildLatestRecipes();
-      notifyListeners();
-    }
-    return _RecipeSaveOutcome(document, storeResult);
+  Future<_RecipeSaveOutcome> _saveSource(String source) =>
+      _synchronizeRecipeSave(() async {
+        final document = _validator.validateSource(source);
+        final storeResult = await _store.saveDocument(document.raw);
+        if (storeResult == StoreRecipeResult.added) {
+          _documents = [..._documents, document];
+          _rebuildLatestRecipes();
+          notifyListeners();
+        }
+        return _RecipeSaveOutcome(document, storeResult);
+      });
+
+  Future<T> _synchronizeRecipeSave<T>(Future<T> Function() action) {
+    final previous = _recipeSaveTail;
+    final release = Completer<void>();
+    _recipeSaveTail = release.future;
+    return () async {
+      await previous;
+      try {
+        return await action();
+      } finally {
+        release.complete();
+      }
+    }();
   }
 
   void setSearchQuery(String query) {
