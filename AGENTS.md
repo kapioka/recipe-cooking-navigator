@@ -195,19 +195,13 @@ Android MVPは`docs/roadmap.md`のPhase 1〜2を中心に進めます。
 
 タスク開始時に、今回のDesired end stateと変更範囲を短く確定してください。
 
-### Outcome-first execution
+### Repository-specific execution specialization
 
-将来改善では、細かな実装順を先に固定するより、今回達成するDesired end state、成功条件、守る境界、停止条件を先に明確にする。
+一般的なPrompt / Plan / Goal / batching / machine-first Acceptance / user visual QAの方針は、上位のCodex global AGENTS / active execution policyに従う。このrepositoryでは同じ一般論を重複定義せず、次だけを追加する。
 
-- 対象と完成条件が明確なbounded taskは、通常の実装指示で直接進めてよい。
-- `/plan`または同等の計画フェーズは、方式選択・migration・互換性・高リスク判断など、実装前の設計判断で結果が大きく変わる場合だけ使う。
-- `/goal`または同等の持続Goalは、複数checkpointにまたがる1つのObjectiveを完了状態まで追跡する価値がある場合だけ使う。
-- Plan / Goal / Loopを形式として毎回要求しない。必要性がなければ追加しない。
-- Desired end stateと制約の範囲内で、実装順、work package、必要なtests、依存解決はCodexが現在のrepositoryから判断してよい。
-- roadmapのPhase番号を厳密な実行順とは扱わない。依存関係がなく安全に進められるReady workは、前Phaseのmanual QA待ちだけを理由に停止しない。
-- 実機、実料理、TalkBack、実音声環境、バッテリーなどでしか確認できない事項は、コードと機械検証が完了している場合は`User device/manual acceptance: pending`として残し、独立したReady workを続ける。
+- roadmapのPhase番号を厳密な実行順とは扱わない。依存関係がなく安全に進められるReady workは、前Phaseのmanual/device QA待ちだけを理由に停止しない。
+- 実機、実料理、TalkBack、実音声環境、バッテリーなどでしか確認できない事項は、machine-verifiableな実装が完了していれば `User device/manual acceptance: pending` として残す。
 - 未確認の実機挙動を「正常」「検証済み」とは扱わない。
-
 
 - 関係する既存仕様・コードを先に読む。
 - 現在のタスクを満たす最小変更を優先する。
@@ -289,6 +283,6 @@ Android MVPは`docs/roadmap.md`のPhase 1〜2を中心に進めます。
 - 仕様上の仮定
 - 未解決事項
 - User device/manual acceptance pending
-- 次に進める最小タスク
+- 次に進めるReady workまたは安全にまとめられるcohesive batch
 
 完了条件を満たした後は、将来機能を追加して作業範囲を広げないでください。

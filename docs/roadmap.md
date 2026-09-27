@@ -4,15 +4,19 @@
 
 ## Current-state contract
 
-- Last reconciled main: `52384ba2e72b144deb0db61c4c852bb69dfd3395`
+- Implementation baseline: `52384ba2e72b144deb0db61c4c852bb69dfd3395`
 - Reconciled: 2026-09-27
 - 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
 - このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
 - Issue、PR、commit、Releaseは履歴・証拠であり、現在の再開地点を決める正本ではない。
 
-再開時に現在の`main` HEADが上のmarkerと一致する場合、現在地確認のために古いIssue、完了PR、過去commitを読み直さない。
+Implementation baselineは「roadmapを最後に編集したcommit」ではなく、**Current statusとcheck状態を最後に照合した実装commit**を指す。roadmap自身の文書commitでmarkerを更新しない。
 
-`main`がmarkerより進んでいる場合は、repository全体を再調査せず、marker以降のcommit / diffと影響testsだけを確認する。その差分をこのCurrent statusとcheck状態へ反映し、markerを更新してから次の作業を選ぶ。
+再開時は、baseline以降の差分を最初から全文再読しない。まず変更pathだけを確認する。
+
+- baseline以降がroadmap、Issue整理、説明文など現在実装の意味を変えない文書変更だけなら、Current statusを再調査しない。
+- application source、tests、schemas、build/runtime設定など現在実装の意味を変え得る差分がある場合だけ、その差分と影響testsを確認し、Current status / check状態を再同期する。
+- 過去判断の理由が必要になった場合だけIssue / PR / commit履歴へ戻る。
 
 roadmapとコードが矛盾する場合は、確認できたコード・testsの実状態を優先し、このroadmapを訂正する。古いroadmap記述に合わせて実装を戻さない。
 
@@ -40,38 +44,17 @@ Flutter / Android版。初期公開版`0.1.0`は専用署名APKとして公開�
 - 外部公開・レシピURL管理はユーザー責任とする
 
 
-## Improvement execution policy
+## Execution notes
 
-改善作業はoutcome-firstで扱う。roadmapのcheckboxを上から順番に消化すること自体を目的にしない。
+一般的なoutcome-first、Plan / Goalの使い分け、cohesive batching、machine-first Acceptance、user visual/manual QA handoffは上位のCodex global AGENTS / active execution policyを正本とし、このroadmapへ重複定義しない。
 
-Desired end state:
+この製品固有の追加ルール:
 
-- 現在仕様から安全に実装できる機能は、machine-verifiableな完成状態まで進んでいる。
-- 最終的にAndroid実機や人間判断が必要な機能でも、実装と自動検証を先に完了できるならそこまで進める。
-- 実機・実料理・アクセシビリティ・音声環境などでしか確認できない事項だけがmanual acceptanceとして明確に残る。
-- 未確定仕様、Later candidates、iOS固有機能を推測で先回り実装しない。
-- 既存データ、Schema互換性、Revision履歴、ユーザー変更を壊さない。
+- Phaseは製品領域と成熟度を整理する区分であり、厳密なblocking gateではない。
+- 前段のmanual/device QA待ちでも、その結果へ依存しないmachine-readyなReady workは進めてよい。
+- 前段の実使用結果によって設計・食品安全・UX判断が変わる場合は先回り実装しない。
+- 実機でしか判定できない項目は未確認のまま残し、成功扱いしない。
 
-作業選択:
-
-- 各Phaseは製品領域と成熟度を整理する区分であり、原則として厳密なblocking gateではない。
-- 現在のコード、tests、仕様、依存関係からReady workを選ぶ。
-- manual/device-only QA待ちだけを理由に、独立したReady workを止めない。
-- 方式選択が成果へ大きく影響するときだけPlanを使う。
-- 複数checkpointへまたがる1つのObjectiveを継続追跡する価値があるときだけGoalを使う。
-- Plan / Goal / Loopを毎回の形式要件にしない。完成状態と検証条件が明確なら直接実装してよい。
-
-Acceptance:
-
-- source / static analysis
-- unit / widget / integration tests
-- Schema / serialization / migration / round-trip validation
-- build / package / startup smoke
-- 必要なForbidden diff確認
-
-を通常の進行ゲートとして優先する。
-
-実機でしか判定できない項目は、未確認であることを保持して`User device/manual acceptance: pending`へ集約する。未確認項目を成功扱いしないが、他のReady workが残っている間は全体停止理由にしない。
 
 ## Phase 0 — Specification
 
