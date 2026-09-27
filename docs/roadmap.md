@@ -25,7 +25,6 @@ Flutter / Android版。初期公開版`0.1.0`は専用署名APKとして公開�
 実機・人間環境でのみ意味のある確認として、調理雑音下の音声認識、TTS音声の誤検知、TalkBack、継続的な実料理利用、バッテリー等が残っている。これらは独立したmachine-readyな実装を止める理由にはしない。
 
 ### Initial public version scope
-### Initial public version scope
 
 初期公開版`0.1.0`の完了点は、「ChatGPTが生成したRecipeをファイルから取り込み、調理前確認を行い、1工程ずつ調理し、明示操作で調理完了を記録する」までとする。
 
@@ -307,7 +306,7 @@ Cooking Profileは、ChatGPTのレシピ調整に使う内部情報と、SNS等�
 
 ## Phase 4 — Backup / portability
 
-実利用後に必要性を確認して追加する。
+仕様と依存関係が確定しているmachine-ready部分は先に実装してよい。Android端末間の実ファイル受け渡しや将来iOSとの相互importなど、実環境でしか確認できない項目はmanual/device acceptanceとして後でまとめて検証する。
 
 - [ ] 単一Recipeのポータブル書き出し / import
 - [ ] 全Recipe + Revision履歴のバックアップ形式設計
