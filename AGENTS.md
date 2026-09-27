@@ -10,7 +10,11 @@ Recipe Cooking Navigatorは、ChatGPTなどが生成した構造化レシピを�
 
 ## 2. Source of Truth
 
-実装前に、今回のタスクに関係する範囲だけ次を参照してください。
+Source of Truthは用途ごとに分ける。Issue、PR、commit、Releaseの履歴を「現在状態」の正本として扱わない。
+
+### 製品仕様・意味の正本
+
+実装前に、今回のタスクに関係する範囲だけ次を参照する。
 
 優先順位:
 
@@ -25,24 +29,49 @@ Recipe Cooking Navigatorは、ChatGPTなどが生成した構造化レシピを�
 9. `examples/`
 10. `README.md`
 
-Schemaの構造・意味については`schemas/*.schema.json`を正本とします。文書とSchemaが食い違う場合は、勝手にどちらかへ合わせず不一致を報告してください。
+Schemaの構造・意味については`schemas/*.schema.json`を正本とする。文書とSchemaが食い違う場合は、勝手にどちらかへ合わせず不一致を報告する。
+
+### 現在の実装状態の正本
+
+現在何が実装済みか、次に何を進められるかを判断するときは次を優先する。
+
+1. 現在のworking branch / `main`のソース、既存tests、build結果
+2. `docs/roadmap.md`のCurrent-state contractと現在のcheck状態
+3. 現在進行中のPRがある場合はその差分
+4. Issue、過去PR、commit、Releaseは判断理由や過去証拠が必要な場合だけ参照する
+
+`docs/roadmap.md`の`Last reconciled main`と現在の`main` HEADが一致する場合、現在地確認のために古いIssueや完了済みPRを読み直さない。
+
+一致しない場合もrepository全体や全履歴を読み直さず、marker以降のcommit / diffと関係するtestsだけを確認し、roadmapの現在状態を先に再同期してから次の作業を選ぶ。
+
+### Resume fast path
+
+新しいCodex sessionや「続きをして」から再開するときは原則として次だけを見る。
+
+1. 適用範囲の`AGENTS.md`
+2. `git status`、現在branch、`main` HEAD
+3. `docs/roadmap.md`のCurrent-state contractと今回関係する未達Outcome
+4. そのOutcomeに関係するコード、tests、仕様
+5. 過去判断の理由が不足する場合だけIssue / PR / commit履歴
+
+「古いIssueの最初の未完了項目」から機械的に再開しない。
 
 ## 3. Current implementation status
 
-FlutterによるAndroidプロジェクト初期化が完了し、Phase 1の実装開始段階です。
+実装状態は変動するため、このファイルへ細かな進捗や「次の実装単位」を重複して固定しない。現在状態は前節のResume fast pathと`docs/roadmap.md`で確認する。
 
-実装技術はFlutterに正式決定しています。当面はAndroidだけを実装し、OS非依存のドメインロジックとAndroid固有連携を分離してください。iOS UIやiOS固有機能は明示的な将来タスクまで追加しないでください。
+実装技術はFlutter。当面はAndroidを実装し、OS非依存のドメインロジックとAndroid固有連携を分離する。iOS UIやiOS固有機能は明示的な将来タスクまで追加しない。
 
 リポジトリ直下で使用する基本コマンド:
 
 - format確認: `dart format --output=none --set-exit-if-changed lib test`
-- static analysis / lint: `pwsh -File .\tool\flutterw.ps1 analyze`
-- unit / widget tests: `pwsh -File .\tool\flutterw.ps1 test`
-- Android debug build: `pwsh -File .\tool\flutterw.ps1 build apk --debug`
+- static analysis / lint: `pwsh -File .\\tool\\flutterw.ps1 analyze`
+- unit / widget tests: `pwsh -File .\\tool\\flutterw.ps1 test`
+- Android debug build: `pwsh -File .\\tool\\flutterw.ps1 build apk --debug`
 
-Windowsでは親パス`E:\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介して実行してください。wrapperは実行中だけ同じrepositoryをASCIIドライブへ割り当て、終了時に解除します。ソースは複製しません。
+Windowsでは親パス`E:\\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介して実行する。wrapperは実行中だけ同じrepositoryをASCIIドライブへ割り当て、終了時に解除する。ソースは複製しない。
 
-新しい検証ツールやコマンドを追加する場合は、実際に導入・実行できることを確認してからこのファイルへ追記してください。
+新しい検証ツールやコマンドを追加する場合は、実際に導入・実行できることを確認してからこのファイルへ追記する。
 
 ## 4. Core product invariants
 
@@ -164,7 +193,15 @@ Android MVPは`docs/roadmap.md`のPhase 1〜2を中心に進めます。
 
 ## 9. Change discipline
 
-タスク開始時に、今回のGoalと変更範囲を短く確定してください。
+タスク開始時に、今回のDesired end stateと変更範囲を短く確定してください。
+
+### Repository-specific execution specialization
+
+一般的なPrompt / Plan / Goal / batching / machine-first Acceptance / user visual QAの方針は、上位のCodex global AGENTS / active execution policyに従う。このrepositoryでは同じ一般論を重複定義せず、次だけを追加する。
+
+- roadmapのPhase番号を厳密な実行順とは扱わない。依存関係がなく安全に進められるReady workは、前Phaseのmanual/device QA待ちだけを理由に停止しない。
+- 実機、実料理、TalkBack、実音声環境、バッテリーなどでしか確認できない事項は、machine-verifiableな実装が完了していれば `User device/manual acceptance: pending` として残す。
+- 未確認の実機挙動を「正常」「検証済み」とは扱わない。
 
 - 関係する既存仕様・コードを先に読む。
 - 現在のタスクを満たす最小変更を優先する。
@@ -202,6 +239,10 @@ Android MVPは`docs/roadmap.md`のPhase 1〜2を中心に進めます。
 - unit tests
 - 必要なwidget / UI tests
 - build
+
+通常Acceptanceはmachine-verifiableな証拠を優先する。実機でしか確認できない項目は、今回の変更自体にGUI操作が不可欠でない限り各work packageの進行条件にせず、manual/device acceptance backlogへ集約する。
+
+同じsource / artifactに対して必須checkが合格済みで、新しい変更・失敗・懸念がない場合は同じ検証を反復しない。
 
 フレームワーク導入後は、実際に使用するコマンドをこのファイルへ追記してください。
 
@@ -241,6 +282,7 @@ Android MVPは`docs/roadmap.md`のPhase 1〜2を中心に進めます。
 - 実行した検証 / テストと結果
 - 仕様上の仮定
 - 未解決事項
-- 次に進める最小タスク
+- User device/manual acceptance pending
+- 次に進めるReady workまたは安全にまとめられるcohesive batch
 
 完了条件を満たした後は、将来機能を追加して作業範囲を広げないでください。

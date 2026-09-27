@@ -1,16 +1,32 @@
 # ロードマップ / ToDo
 
-このファイルは、現時点で決まっている仕様と、次回以降に進める作業を分けて管理する。
+このファイルは、製品として到達したい状態と未達Outcomeを管理する。実行ログや固定された逐次手順ではない。
+
+## Current-state contract
+
+- Implementation baseline: `52384ba2e72b144deb0db61c4c852bb69dfd3395`
+- Reconciled: 2026-09-27
+- 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
+- このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
+- Issue、PR、commit、Releaseは履歴・証拠であり、現在の再開地点を決める正本ではない。
+
+Implementation baselineは「roadmapを最後に編集したcommit」ではなく、**Current statusとcheck状態を最後に照合した実装commit**を指す。roadmap自身の文書commitでmarkerを更新しない。
+
+再開時は、baseline以降の差分を最初から全文再読しない。まず変更pathだけを確認する。
+
+- baseline以降がroadmap、Issue整理、説明文など現在実装の意味を変えない文書変更だけなら、Current statusを再調査しない。
+- application source、tests、schemas、build/runtime設定など現在実装の意味を変え得る差分がある場合だけ、その差分と影響testsを確認し、Current status / check状態を再同期する。
+- 過去判断の理由が必要になった場合だけIssue / PR / commit履歴へ戻る。
+
+roadmapとコードが矛盾する場合は、確認できたコード・testsの実状態を優先し、このroadmapを訂正する。古いroadmap記述に合わせて実装を戻さない。
 
 ## Current status
 
-実装技術はFlutterに決定済み。Android初期版として、Recipeファイル取り込み、Schema検証、端末内保存、レシピ一覧・検索・タグ・詳細、Cooking mode、音声操作・TTS、タイマー、画面常時点灯、中断・再開、調理完了まで実装済み。
+Flutter / Android版。初期公開版`0.1.0`は専用署名APKとして公開済み。
 
-2026-09-06: 自動テスト26件、formatter、static analysis、Android debug buildが成功。Pixel 10a（Android 17 / API 37）へ更新し、既存Recipeデータ、文字サイズ、画面回転設定を保持したまま、検索、調理操作、途中再開、読み上げ、音声操作受付、タイマー調整・リセット、調理完了を確認した。タグ編集・再起動後の永続化、調理雑音下の実声認識、TalkBackは実機未検証。
+現在の`main`では、初期MVPに加えてGoogle Drive Recipe Inbox、Recipe ID単位のVersion履歴、latest / active Revisionの分離、過去Revisionへのactive切替、`parent_revision`を使った履歴表示まで実装済み。
 
-2026-09-07: 専用のrelease署名鍵と、debug鍵へfallbackしないbuild・検証手順を整備し、署名済み`0.1.0 (1)` APKを生成・検証した。鍵の復旧情報をバックアップし、Apache License 2.0、NOTICE、食品安全上の注意を採用した。一般公開には、専用署名APKの実機検証、tag・GitHub Release公開が残っている。
-
-2026-09-08: 専用署名APKをPixel 10aで検証し、PR #4をmainへmergeした。APK生成元commitへ`v0.1.0` tagを付け、APKとchecksumをGitHub Releaseへ公開して再ダウンロード照合まで完了した。次の実装単位はGoogle Drive Recipe Inboxとする。調理雑音下の実発話認識はPhase 5の実料理QAへ残す。
+実機・人間環境でのみ意味のある確認として、調理雑音下の音声認識、TTS音声の誤検知、TalkBack、継続的な実料理利用、バッテリー等が残っている。これらは独立したmachine-readyな実装を止める理由にはしない。
 
 ### Initial public version scope
 
@@ -26,6 +42,19 @@
 - iPhone対応を妨げない共通データ設計を維持する
 - 専用サーバー、ホスティング、ユーザーアカウントを前提にしない
 - 外部公開・レシピURL管理はユーザー責任とする
+
+
+## Execution notes
+
+一般的なoutcome-first、Plan / Goalの使い分け、cohesive batching、machine-first Acceptance、user visual/manual QA handoffは上位のCodex global AGENTS / active execution policyを正本とし、このroadmapへ重複定義しない。
+
+この製品固有の追加ルール:
+
+- Phaseは製品領域と成熟度を整理する区分であり、厳密なblocking gateではない。
+- 前段のmanual/device QA待ちでも、その結果へ依存しないmachine-readyなReady workは進めてよい。
+- 前段の実使用結果によって設計・食品安全・UX判断が変わる場合は先回り実装しない。
+- 実機でしか判定できない項目は未確認のまま残し、成功扱いしない。
+
 
 ## Phase 0 — Specification
 
@@ -260,7 +289,7 @@ Cooking Profileは、ChatGPTのレシピ調整に使う内部情報と、SNS等�
 
 ## Phase 4 — Backup / portability
 
-実利用後に必要性を確認して追加する。
+仕様と依存関係が確定しているmachine-ready部分は先に実装してよい。Android端末間の実ファイル受け渡しや将来iOSとの相互importなど、実環境でしか確認できない項目はmanual/device acceptanceとして後でまとめて検証する。
 
 - [ ] 単一Recipeのポータブル書き出し / import
 - [ ] 全Recipe + Revision履歴のバックアップ形式設計
@@ -355,9 +384,11 @@ Android版が完成・安定してから判断する。
 
 ## Development rule
 
-各Phaseは前段の利用上の問題を確認してから拡張する。
+Phaseは固定された逐次実行順ではない。実際の依存関係、仕様の確定度、変更リスク、検証可能性を見て、現在安全に進められるOutcomeを選ぶ。
 
-機能数ではなく、次の摩擦が減ったかを評価する。
+前段のmanual QAが必要でも、後続機能がその結果へ依存せずmachine-verifiableに実装できるなら先へ進めてよい。逆に、前段結果によって設計が変わる場合は先回り実装しない。
+
+機能数やcheckbox消化数ではなく、次の摩擦が減ったかを評価する。
 
 - スクロールや戻り操作
 - 次工程の見落とし
