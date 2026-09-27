@@ -1,17 +1,30 @@
 # ロードマップ / ToDo
 
-このファイルは、現時点で決まっている仕様と、次回以降に進める作業を分けて管理する。
+このファイルは、製品として到達したい状態と未達Outcomeを管理する。実行ログや固定された逐次手順ではない。
+
+## Current-state contract
+
+- Last reconciled main: `52384ba2e72b144deb0db61c4c852bb69dfd3395`
+- Reconciled: 2026-09-27
+- 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
+- このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
+- Issue、PR、commit、Releaseは履歴・証拠であり、現在の再開地点を決める正本ではない。
+
+再開時に現在の`main` HEADが上のmarkerと一致する場合、現在地確認のために古いIssue、完了PR、過去commitを読み直さない。
+
+`main`がmarkerより進んでいる場合は、repository全体を再調査せず、marker以降のcommit / diffと影響testsだけを確認する。その差分をこのCurrent statusとcheck状態へ反映し、markerを更新してから次の作業を選ぶ。
+
+roadmapとコードが矛盾する場合は、確認できたコード・testsの実状態を優先し、このroadmapを訂正する。古いroadmap記述に合わせて実装を戻さない。
 
 ## Current status
 
-実装技術はFlutterに決定済み。Android初期版として、Recipeファイル取り込み、Schema検証、端末内保存、レシピ一覧・検索・タグ・詳細、Cooking mode、音声操作・TTS、タイマー、画面常時点灯、中断・再開、調理完了まで実装済み。
+Flutter / Android版。初期公開版`0.1.0`は専用署名APKとして公開済み。
 
-2026-09-06: 自動テスト26件、formatter、static analysis、Android debug buildが成功。Pixel 10a（Android 17 / API 37）へ更新し、既存Recipeデータ、文字サイズ、画面回転設定を保持したまま、検索、調理操作、途中再開、読み上げ、音声操作受付、タイマー調整・リセット、調理完了を確認した。タグ編集・再起動後の永続化、調理雑音下の実声認識、TalkBackは実機未検証。
+現在の`main`では、初期MVPに加えてGoogle Drive Recipe Inbox、Recipe ID単位のVersion履歴、latest / active Revisionの分離、過去Revisionへのactive切替、`parent_revision`を使った履歴表示まで実装済み。
 
-2026-09-07: 専用のrelease署名鍵と、debug鍵へfallbackしないbuild・検証手順を整備し、署名済み`0.1.0 (1)` APKを生成・検証した。鍵の復旧情報をバックアップし、Apache License 2.0、NOTICE、食品安全上の注意を採用した。一般公開には、専用署名APKの実機検証、tag・GitHub Release公開が残っている。
+実機・人間環境でのみ意味のある確認として、調理雑音下の音声認識、TTS音声の誤検知、TalkBack、継続的な実料理利用、バッテリー等が残っている。これらは独立したmachine-readyな実装を止める理由にはしない。
 
-2026-09-08: 専用署名APKをPixel 10aで検証し、PR #4をmainへmergeした。APK生成元commitへ`v0.1.0` tagを付け、APKとchecksumをGitHub Releaseへ公開して再ダウンロード照合まで完了した。次の実装単位はGoogle Drive Recipe Inboxとする。調理雑音下の実発話認識はPhase 5の実料理QAへ残す。
-
+### Initial public version scope
 ### Initial public version scope
 
 初期公開版`0.1.0`の完了点は、「ChatGPTが生成したRecipeをファイルから取り込み、調理前確認を行い、1工程ずつ調理し、明示操作で調理完了を記録する」までとする。
@@ -26,6 +39,40 @@
 - iPhone対応を妨げない共通データ設計を維持する
 - 専用サーバー、ホスティング、ユーザーアカウントを前提にしない
 - 外部公開・レシピURL管理はユーザー責任とする
+
+
+## Improvement execution policy
+
+改善作業はoutcome-firstで扱う。roadmapのcheckboxを上から順番に消化すること自体を目的にしない。
+
+Desired end state:
+
+- 現在仕様から安全に実装できる機能は、machine-verifiableな完成状態まで進んでいる。
+- 最終的にAndroid実機や人間判断が必要な機能でも、実装と自動検証を先に完了できるならそこまで進める。
+- 実機・実料理・アクセシビリティ・音声環境などでしか確認できない事項だけがmanual acceptanceとして明確に残る。
+- 未確定仕様、Later candidates、iOS固有機能を推測で先回り実装しない。
+- 既存データ、Schema互換性、Revision履歴、ユーザー変更を壊さない。
+
+作業選択:
+
+- 各Phaseは製品領域と成熟度を整理する区分であり、原則として厳密なblocking gateではない。
+- 現在のコード、tests、仕様、依存関係からReady workを選ぶ。
+- manual/device-only QA待ちだけを理由に、独立したReady workを止めない。
+- 方式選択が成果へ大きく影響するときだけPlanを使う。
+- 複数checkpointへまたがる1つのObjectiveを継続追跡する価値があるときだけGoalを使う。
+- Plan / Goal / Loopを毎回の形式要件にしない。完成状態と検証条件が明確なら直接実装してよい。
+
+Acceptance:
+
+- source / static analysis
+- unit / widget / integration tests
+- Schema / serialization / migration / round-trip validation
+- build / package / startup smoke
+- 必要なForbidden diff確認
+
+を通常の進行ゲートとして優先する。
+
+実機でしか判定できない項目は、未確認であることを保持して`User device/manual acceptance: pending`へ集約する。未確認項目を成功扱いしないが、他のReady workが残っている間は全体停止理由にしない。
 
 ## Phase 0 — Specification
 
@@ -355,9 +402,11 @@ Android版が完成・安定してから判断する。
 
 ## Development rule
 
-各Phaseは前段の利用上の問題を確認してから拡張する。
+Phaseは固定された逐次実行順ではない。実際の依存関係、仕様の確定度、変更リスク、検証可能性を見て、現在安全に進められるOutcomeを選ぶ。
 
-機能数ではなく、次の摩擦が減ったかを評価する。
+前段のmanual QAが必要でも、後続機能がその結果へ依存せずmachine-verifiableに実装できるなら先へ進めてよい。逆に、前段結果によって設計が変わる場合は先回り実装しない。
+
+機能数やcheckbox消化数ではなく、次の摩擦が減ったかを評価する。
 
 - スクロールや戻り操作
 - 次工程の見落とし
