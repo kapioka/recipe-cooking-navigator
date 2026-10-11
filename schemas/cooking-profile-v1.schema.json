@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kapioka.github.io/recipe-cooking-navigator/schemas/cooking-profile-v1.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["profile_schema_version", "type", "profile_id", "revision", "updated_at", "preferences", "explicit_constraints"],
+  "properties": {
+    "profile_schema_version": {"const": "1.0.0"}, "type": {"const": "cooking_profile"},
+    "profile_id": {"type": "string", "pattern": "\\S"},
+    "revision": {"type": "integer", "minimum": 1},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "explicit_constraints": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+    "preferences": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "dimension", "direction", "rules_version", "feedback_ids", "confirmed_at"],
+      "properties": {
+        "scope": {"$ref": "#/$defs/scope"}, "dimension": {"$ref": "#/$defs/dimension"},
+        "direction": {"enum": [-1, 1]}, "rules_version": {"const": "1.0.0"},
+        "feedback_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "\\S"}},
+        "confirmed_at": {"type": "string", "format": "date-time"}
+      }
+    }}
+  },
+  "$defs": {
+    "dimension": {"enum": ["sweetness", "saltiness", "umami", "spiciness", "acidity", "richness", "aroma", "texture"]},
+    "scope": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "value"],
+      "properties": {"kind": {"enum": ["recipe", "category", "global"]}, "value": {"type": "string", "pattern": "\\S"}},
+      "if": {"properties": {"kind": {"const": "global"}}}, "then": {"properties": {"value": {"const": "*"}}}
+    }
+  }
+}

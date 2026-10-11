@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:collection/collection.dart';
 
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
+import '../domain/cooking_context.dart';
 import 'cooking_screen.dart';
+import 'kitchen_scope.dart';
 
 class CookingEntry extends StatefulWidget {
   const CookingEntry({
     required this.recipe,
     required this.controller,
+    required this.cookingContext,
     super.key,
   });
   final RecipeDocument recipe;
   final RecipeLibraryController controller;
+  final CookingContext cookingContext;
   @override
   State<CookingEntry> createState() => _CookingEntryState();
 }
@@ -20,6 +25,7 @@ class _CookingEntryState extends State<CookingEntry> {
   Map<String, dynamic>? progress;
   RecipeDocument? savedRecipe;
   int? savedIndex;
+  CookingContext? savedContext;
   String? error;
   bool loading = true;
   bool busy = false;
@@ -42,12 +48,30 @@ class _CookingEntryState extends State<CookingEntry> {
               p['revision'] as int,
             );
       final index = recipe?.steps.indexWhere((s) => s['id'] == p!['step_id']);
+      final context = p == null
+          ? null
+          : CookingContext.fromJson(
+              Map<String, dynamic>.from(p['cooking_context'] as Map),
+            );
+      final snapshotMatches =
+          p == null ||
+          recipe != null &&
+              const DeepCollectionEquality().equals(
+                recipe.raw,
+                p['recipe_snapshot'],
+              );
       if (mounted) {
         setState(() {
           progress = p;
           savedRecipe = recipe;
           savedIndex = index;
-          error = p != null && (recipe == null || index == null || index < 0)
+          savedContext = context;
+          error =
+              p != null &&
+                  (recipe == null ||
+                      index == null ||
+                      index < 0 ||
+                      !snapshotMatches)
               ? '保存したVersionまたは工程が見つかりません。「最初から」で開始方法を選べます。'
               : null;
           unreadable = false;
@@ -73,7 +97,7 @@ class _CookingEntryState extends State<CookingEntry> {
         builder: (context) => AlertDialog(
           title: const Text('最初から始めますか？'),
           content: Text(
-            'Version ${widget.recipe.revision}の先頭から開始します。現在の途中位置を更新します。',
+            'Version ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の先頭から開始します。現在の途中位置を更新します。',
           ),
           actions: [
             TextButton(
@@ -94,23 +118,29 @@ class _CookingEntryState extends State<CookingEntry> {
     }
     final recipe = resume ? savedRecipe! : widget.recipe;
     final index = resume ? savedIndex! : 0;
+    final cookingContext = resume ? savedContext! : widget.cookingContext;
     setState(() => busy = true);
     try {
-      await widget.controller.cookingStore.savePosition(
-        recipe.id,
-        recipe.revision,
-        recipe.steps[index]['id'] as String,
-        restart: !resume,
-      );
+      if (!resume) {
+        await widget.controller.cookingStore.startCooking(
+          recipe,
+          cookingContext,
+          recipe.steps[index]['id'] as String,
+        );
+      }
       if (!mounted) {
         return;
       }
+      final kitchen = KitchenScope.maybeOf(context);
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => CookingScreen(
             recipe: recipe,
             store: widget.controller.cookingStore,
             initialIndex: index,
+            cookingContext: cookingContext,
+            kitchenController: kitchen?.controller,
+            performKitchenOperation: kitchen?.perform,
           ),
         ),
       );
@@ -133,6 +163,11 @@ class _CookingEntryState extends State<CookingEntry> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (KitchenScope.contains(context))
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('キッチンの共通タイマーを使って調理します。'),
+            ),
           if (loading) const LinearProgressIndicator(),
           if (error != null)
             Text(
@@ -143,7 +178,9 @@ class _CookingEntryState extends State<CookingEntry> {
               savedRecipe != null &&
               savedIndex != null &&
               savedIndex! >= 0) ...[
-            Text('調理途中です・Version ${savedRecipe!.revision}'),
+            Text(
+              '調理途中です・Version ${savedRecipe!.revision}・${savedContext!.targetServings}人分',
+            ),
             Text(
               '工程 ${savedIndex! + 1} / ${savedRecipe!.steps.length} ${savedRecipe!.steps[savedIndex!]['title']}',
             ),

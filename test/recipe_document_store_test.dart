@@ -14,7 +14,7 @@ void main() {
       'recipe-cooking-navigator-test-',
     );
     store = FileRecipeDocumentStore(
-      File('${temporaryDirectory.path}/recipes-v1.json'),
+      File('${temporaryDirectory.path}/recipes-v2.json'),
     );
     recipeDocument = jsonDecode(
       await File('examples/recipe-example.json').readAsString(),
@@ -85,4 +85,18 @@ void main() {
       '豚の生姜焼き',
     );
   });
+
+  test(
+    'writes only the v2 area and leaves a legacy v1 file unchanged',
+    () async {
+      final legacy = File('${temporaryDirectory.path}/recipes-v1.json');
+      const legacyBytes = '{"storage_version":1,"recipes":[{"legacy":true}]}';
+      await legacy.writeAsString(legacyBytes);
+
+      await store.saveDocument(recipeDocument);
+
+      expect(await legacy.readAsString(), legacyBytes);
+      expect(await store.file.exists(), isTrue);
+    },
+  );
 }

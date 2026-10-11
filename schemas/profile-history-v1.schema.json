@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kapioka.github.io/recipe-cooking-navigator/schemas/profile-history-v1.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "history_schema_version",
+        "type",
+        "record_id",
+        "result_profile",
+        "result_digest",
+        "kind",
+        "parent_id",
+        "base_profile",
+        "base_digest",
+        "operation",
+        "evidence",
+        "parent_digest"
+      ],
+      "properties": {
+        "history_schema_version": {
+          "const": "1.0.0"
+        },
+        "type": {
+          "const": "profile_history"
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "result_profile": {
+          "oneOf": [
+            {
+              "$ref": "cooking-profile-v1.schema.json"
+            },
+            {
+              "$ref": "cooking-profile-v1.1.schema.json"
+            }
+          ]
+        },
+        "result_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "kind": {
+          "const": "bootstrap"
+        },
+        "parent_id": {
+          "type": "null"
+        },
+        "base_profile": {
+          "type": "null"
+        },
+        "base_digest": {
+          "type": "null"
+        },
+        "operation": {
+          "type": "null"
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "parent_digest": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "history_schema_version",
+        "type",
+        "record_id",
+        "result_profile",
+        "result_digest",
+        "kind",
+        "parent_id",
+        "base_profile",
+        "base_digest",
+        "operation",
+        "evidence",
+        "parent_digest"
+      ],
+      "properties": {
+        "history_schema_version": {
+          "const": "1.0.0"
+        },
+        "type": {
+          "const": "profile_history"
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "result_profile": {
+          "oneOf": [
+            {
+              "$ref": "cooking-profile-v1.schema.json"
+            },
+            {
+              "$ref": "cooking-profile-v1.1.schema.json"
+            }
+          ]
+        },
+        "result_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "kind": {
+          "const": "update"
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "base_profile": {
+          "oneOf": [
+            {
+              "$ref": "cooking-profile-v1.schema.json"
+            },
+            {
+              "$ref": "cooking-profile-v1.1.schema.json"
+            }
+          ]
+        },
+        "base_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "operation": {
+          "allOf": [
+            {
+              "$ref": "preference-operation-v1.schema.json"
+            },
+            {
+              "properties": {
+                "candidate": {
+                  "properties": {
+                    "status": {
+                      "const": "accepted"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "feedback-evidence-v1.schema.json"
+          }
+        },
+        "parent_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  ]
+}

@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../application/kitchen_controller.dart';
 import '../data/cooking_store.dart';
+import '../domain/cooking_context.dart';
+import '../domain/kitchen_timer.dart';
 import '../domain/recipe_document.dart';
 import '../platform/cooking_device.dart';
+import 'kitchen_scope.dart';
 
 enum _CookingMenuAction { complete, help }
 
@@ -13,11 +17,17 @@ class CookingScreen extends StatefulWidget {
     required this.recipe,
     required this.store,
     required this.initialIndex,
+    required this.cookingContext,
+    this.kitchenController,
+    this.performKitchenOperation,
     super.key,
-  });
+  }) : assert((kitchenController == null) == (performKitchenOperation == null));
   final RecipeDocument recipe;
   final CookingStore store;
   final int initialIndex;
+  final CookingContext cookingContext;
+  final KitchenController? kitchenController;
+  final KitchenOperation? performKitchenOperation;
   @override
   State<CookingScreen> createState() => _CookingScreenState();
 }
@@ -49,10 +59,48 @@ class _CookingScreenState extends State<CookingScreen> {
   static const _border = Color(0xFFE8CFC0);
   List<Map<String, dynamic>> get steps => widget.recipe.steps;
   Map<String, dynamic> get step => steps[index];
+  bool get _usesKitchenTimer => widget.kitchenController != null;
+
+  KitchenTimer? get _currentKitchenTimer {
+    if (!_usesKitchenTimer) return null;
+    for (final timer in widget.kitchenController!.timers.reversed) {
+      final source = timer.source;
+      if (source is RecipeStepTimerSource &&
+          source.recipeId == widget.recipe.id &&
+          source.recipeRevision == widget.recipe.revision &&
+          source.stepId == step['id'] &&
+          (timer.state == KitchenTimerState.running ||
+              timer.state == KitchenTimerState.paused ||
+              timer.state == KitchenTimerState.ready ||
+              (timer.state == KitchenTimerState.finished &&
+                  !timer.isFinishedAcknowledged))) {
+        return timer;
+      }
+    }
+    return null;
+  }
+
+  bool get _timerVisible => _usesKitchenTimer
+      ? _currentKitchenTimer != null && timerExtraSeconds == 0
+      : deadline != null;
+
+  bool get _timerHasFinished => _usesKitchenTimer
+      ? _currentKitchenTimer?.state == KitchenTimerState.finished &&
+            timerExtraSeconds == 0
+      : timerFinished;
+
+  String get _timerStepName {
+    if (_usesKitchenTimer) {
+      final source = _currentKitchenTimer?.source;
+      if (source is RecipeStepTimerSource) return source.stepDisplayName;
+    }
+    return timerStep ?? step['title'] as String;
+  }
 
   @override
   void initState() {
     super.initState();
+    widget.kitchenController?.addListener(_kitchenTimerChanged);
     device.onEvent = _event;
     _invoke('wake');
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -81,12 +129,19 @@ class _CookingScreenState extends State<CookingScreen> {
 
   @override
   void dispose() {
+    widget.kitchenController?.removeListener(_kitchenTimerChanged);
     ticker?.cancel();
     scroll.dispose();
     speaking.dispose();
     timerVersion.dispose();
     device.close().catchError((Object _) {});
     super.dispose();
+  }
+
+  void _kitchenTimerChanged() {
+    if (!mounted) return;
+    setState(() {});
+    timerVersion.value++;
   }
 
   Future<void> _invoke(String method, [dynamic arg]) async {
@@ -169,7 +224,7 @@ class _CookingScreenState extends State<CookingScreen> {
     });
     await _stopSpeaking();
     try {
-      await widget.store.savePosition(
+      await widget.store.updatePosition(
         widget.recipe.id,
         widget.recipe.revision,
         steps[target]['id'] as String,
@@ -177,7 +232,7 @@ class _CookingScreenState extends State<CookingScreen> {
       if (mounted) {
         setState(() {
           index = target;
-          if (deadline == null) timerExtraSeconds = 0;
+          if (_usesKitchenTimer || deadline == null) timerExtraSeconds = 0;
         });
         timerVersion.value++;
         if (scroll.hasClients) scroll.jumpTo(0);
@@ -194,13 +249,55 @@ class _CookingScreenState extends State<CookingScreen> {
   }
 
   int _remaining() {
+    if (_usesKitchenTimer) {
+      final timer = _currentKitchenTimer;
+      if (timer == null) return 0;
+      final remaining = timer.remainingAt(now: widget.kitchenController!.now());
+      return ((remaining.inMilliseconds + 999) ~/ 1000).clamp(0, 999999);
+    }
     if (deadline == null) return 0;
     final milliseconds = deadline!.difference(DateTime.now()).inMilliseconds;
     if (milliseconds <= 0) return 0;
     return ((milliseconds + 999) ~/ 1000).clamp(0, 999999);
   }
 
-  void _startTimer() {
+  Future<void> _startTimer() async {
+    if (_usesKitchenTimer) {
+      final existing = _currentKitchenTimer;
+      if (existing != null &&
+          (existing.state == KitchenTimerState.running ||
+              existing.state == KitchenTimerState.paused)) {
+        setState(() => error = 'この工程のタイマーはすでに動作中です。');
+        return;
+      }
+      final recipeSeconds = step['timer_seconds'] as int? ?? 0;
+      final seconds = recipeSeconds + timerExtraSeconds;
+      if (seconds <= 0) {
+        setState(() => error = '時間を追加してからタイマーを開始してください。');
+        return;
+      }
+      final succeeded = await widget.performKitchenOperation!(
+        (kitchen) => kitchen.createRecipeStep(
+          recipeId: widget.recipe.id,
+          recipeRevision: widget.recipe.revision,
+          recipeDisplayName: widget.recipe.title,
+          stepId: step['id'] as String,
+          stepDisplayName: step['title'] as String,
+          duration: Duration(seconds: seconds),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        if (succeeded) {
+          timerExtraSeconds = 0;
+          error = null;
+        } else {
+          error = 'タイマーを保存できなかったため、開始していません。';
+        }
+      });
+      timerVersion.value++;
+      return;
+    }
     if (deadline != null && !timerFinished) {
       setState(() => error = '実行中のタイマーを停止してから開始してください。');
       return;
@@ -240,7 +337,28 @@ class _CookingScreenState extends State<CookingScreen> {
     });
   }
 
-  void _addTimerSeconds(int seconds) {
+  Future<void> _addTimerSeconds(int seconds) async {
+    if (_usesKitchenTimer) {
+      final timer = _currentKitchenTimer;
+      if (timer != null &&
+          (timer.state == KitchenTimerState.running ||
+              timer.state == KitchenTimerState.paused)) {
+        final succeeded = await widget.performKitchenOperation!(
+          (kitchen) => kitchen.extend(timer.id, Duration(seconds: seconds)),
+        );
+        if (!mounted) return;
+        if (!succeeded) {
+          setState(() => error = 'タイマーの延長を保存できませんでした。');
+        }
+      } else {
+        setState(() {
+          timerExtraSeconds += seconds;
+          error = null;
+        });
+      }
+      timerVersion.value++;
+      return;
+    }
     setState(() {
       error = null;
       if (deadline == null) {
@@ -259,6 +377,15 @@ class _CookingScreenState extends State<CookingScreen> {
   }
 
   void _resetTimerAdjustments() {
+    if (_usesKitchenTimer) {
+      if (timerExtraSeconds == 0) return;
+      setState(() {
+        timerExtraSeconds = 0;
+        error = null;
+      });
+      timerVersion.value++;
+      return;
+    }
     if (deadline == null) {
       if (timerExtraSeconds == 0) return;
       setState(() {
@@ -283,7 +410,30 @@ class _CookingScreenState extends State<CookingScreen> {
     timerVersion.value++;
   }
 
-  void _stopTimer() {
+  Future<void> _stopTimer() async {
+    if (_usesKitchenTimer) {
+      final timer = _currentKitchenTimer;
+      if (timer == null) return;
+      final succeeded = await widget.performKitchenOperation!((kitchen) {
+        switch (timer.state) {
+          case KitchenTimerState.running:
+          case KitchenTimerState.paused:
+            kitchen.cancel(timer.id);
+          case KitchenTimerState.finished:
+            kitchen.acknowledge(timer.id);
+          case KitchenTimerState.ready:
+            kitchen.remove(timer.id);
+          case KitchenTimerState.cancelled:
+            break;
+        }
+      });
+      if (!mounted) return;
+      if (!succeeded) {
+        setState(() => error = 'タイマーの停止を保存できませんでした。');
+      }
+      timerVersion.value++;
+      return;
+    }
     ticker?.cancel();
     setState(() {
       deadline = null;
@@ -298,11 +448,15 @@ class _CookingScreenState extends State<CookingScreen> {
 
   String _speechText() => [
     step['title'],
-    step['instruction'],
-    ...widget.recipe.ingredientsFor(step),
-    if (step['heat'] != null) '火加減 ${step['heat']}',
+    widget.recipe
+        .renderText(step['instruction'] as List<dynamic>, widget.cookingContext)
+        .speechText,
+    for (final amountId in step['amount_ids'] as List<dynamic>)
+      widget.recipe.amountSpeech(amountId as String, widget.cookingContext),
+    if (step['heat'] != null)
+      '火加減 ${widget.recipe.renderText(step['heat'] as List<dynamic>, widget.cookingContext).speechText}',
     if (step['timer_seconds'] != null) '時間の目安 ${step['timer_seconds']}秒',
-    '完了判断 ${step['done_when']}',
+    '完了判断 ${widget.recipe.renderText(step['done_when'] as List<dynamic>, widget.cookingContext).speechText}',
   ].join('。');
 
   void _startSpeaking() {
@@ -388,10 +542,14 @@ class _CookingScreenState extends State<CookingScreen> {
     title: '材料一覧',
     child: ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      itemCount: widget.recipe.ingredients.length,
+      itemCount: widget.recipe
+          .ingredientSummaries(widget.cookingContext)
+          .length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, position) {
-        final ingredient = widget.recipe.ingredients[position];
+        final ingredient = widget.recipe.ingredientSummaries(
+          widget.cookingContext,
+        )[position];
         return ListTile(
           minVerticalPadding: 16,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -402,7 +560,7 @@ class _CookingScreenState extends State<CookingScreen> {
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              '${ingredient.quantity}${ingredient.note == null ? '' : ' ${ingredient.note}'}',
+              '${ingredient.quantity}${ingredient.details == null ? '' : '\n${ingredient.details}'}${ingredient.note == null ? '' : '\n${ingredient.note}'}',
               style: const TextStyle(fontSize: 19, height: 1.35),
             ),
           ),
@@ -451,11 +609,11 @@ class _CookingScreenState extends State<CookingScreen> {
 
   void _help() => _panel(
     title: '画面操作の説明',
-    child: const SingleChildScrollView(
-      padding: EdgeInsets.all(24),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
       child: Text(
-        '左30%をタップ：前の工程\n中央40%をタップ：音声操作パネルを開く\n右30%をタップ：次の工程\n\n左へスワイプ：次へ\n右へスワイプ：前へ\n上下スクロール：長い本文を読む\n\n画面上部の「音声操作」ボタン：音声操作のON・OFFと使える言葉を確認\n\n「読み上げ」は短く押すと開始・停止、長押しすると読み上げの詳細を開きます。\n\n工程移動は作業の完了判定ではありません。\n途中位置は自動保存されます。タイマーは再起動すると停止します。\n\n音声操作は端末の認識機能を使います。端末設定により音声が認識サービスへ送信される場合があります。',
-        style: TextStyle(fontSize: 20, height: 1.55),
+        '左30%をタップ：前の工程\n中央40%をタップ：音声操作パネルを開く\n右30%をタップ：次の工程\n\n左へスワイプ：次へ\n右へスワイプ：前へ\n上下スクロール：長い本文を読む\n\n画面上部の「音声操作」ボタン：音声操作のON・OFFと使える言葉を確認\n\n「読み上げ」は短く押すと開始・停止、長押しすると読み上げの詳細を開きます。\n\n工程移動は作業の完了判定ではありません。\n途中位置は自動保存されます。${_usesKitchenTimer ? 'キッチンのタイマーはRecipeと分けて保存し、工程を移動しても継続します。' : 'この調理画面のタイマーは再起動すると停止します。'}\n\n音声操作は端末の認識機能を使います。端末設定により音声が認識サービスへ送信される場合があります。',
+        style: const TextStyle(fontSize: 20, height: 1.55),
       ),
     ),
   );
@@ -466,6 +624,19 @@ class _CookingScreenState extends State<CookingScreen> {
   }
 
   String _timerButtonLabel() {
+    if (_usesKitchenTimer) {
+      final timer = timerExtraSeconds == 0 ? _currentKitchenTimer : null;
+      if (timer != null) {
+        if (timer.state == KitchenTimerState.finished) return 'タイマー終了';
+        if (timer.state == KitchenTimerState.running ||
+            timer.state == KitchenTimerState.paused) {
+          return '残り${_remaining()}秒';
+        }
+      }
+      final seconds = (step['timer_seconds'] as int? ?? 0) + timerExtraSeconds;
+      if (seconds == 0) return 'タイマー設定';
+      return '$seconds秒タイマー';
+    }
     if (deadline != null) {
       return timerFinished ? 'タイマー終了' : '残り${_remaining()}秒';
     }
@@ -672,13 +843,30 @@ class _CookingScreenState extends State<CookingScreen> {
     child: ValueListenableBuilder<int>(
       valueListenable: timerVersion,
       builder: (context, _, _) {
-        final recipeSeconds = deadline == null
+        final kitchenTimer = _usesKitchenTimer && timerExtraSeconds == 0
+            ? _currentKitchenTimer
+            : null;
+        final kitchenTiming =
+            kitchenTimer?.state == KitchenTimerState.running ||
+            kitchenTimer?.state == KitchenTimerState.paused;
+        final kitchenFinished =
+            kitchenTimer?.state == KitchenTimerState.finished;
+        final timerIdle = _usesKitchenTimer
+            ? !kitchenTiming && !kitchenFinished
+            : deadline == null;
+        final recipeSeconds = _usesKitchenTimer || deadline == null
             ? step['timer_seconds'] as int? ?? 0
             : timerOriginalSeconds ?? 0;
-        final displaySeconds = deadline == null
+        final displaySeconds = _usesKitchenTimer
+            ? kitchenTiming || kitchenFinished
+                  ? _remaining()
+                  : recipeSeconds + timerExtraSeconds
+            : deadline == null
             ? recipeSeconds + timerExtraSeconds
             : _remaining();
-        final canResetAdjustments = deadline == null
+        final canResetAdjustments = _usesKitchenTimer
+            ? timerIdle && timerExtraSeconds > 0
+            : deadline == null
             ? timerExtraSeconds > 0
             : !timerFinished && timerAdjustmentSeconds > 0;
         return ListView(
@@ -699,8 +887,12 @@ class _CookingScreenState extends State<CookingScreen> {
               child: Column(
                 children: [
                   Text(
-                    deadline == null
+                    timerIdle
                         ? '設定時間'
+                        : _usesKitchenTimer
+                        ? kitchenFinished
+                              ? 'タイマー終了'
+                              : '残り時間'
                         : timerFinished
                         ? 'タイマー終了'
                         : '残り時間',
@@ -747,22 +939,32 @@ class _CookingScreenState extends State<CookingScreen> {
               key: const Key('timer_toggle_detail'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(70),
-                backgroundColor: deadline == null ? _rust : _rustDark,
+                backgroundColor: timerIdle ? _rust : _rustDark,
                 textStyle: const TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              onPressed: deadline == null && displaySeconds == 0
+              onPressed: timerIdle && displaySeconds == 0
                   ? null
-                  : deadline == null
+                  : timerIdle
                   ? _startTimer
                   : _stopTimer,
               icon: Icon(
-                deadline == null ? Icons.play_arrow : Icons.stop,
+                timerIdle
+                    ? Icons.play_arrow
+                    : kitchenFinished
+                    ? Icons.check_circle_outline
+                    : Icons.stop,
                 size: 32,
               ),
-              label: Text(deadline == null ? 'タイマー開始' : 'タイマー停止'),
+              label: Text(
+                timerIdle
+                    ? 'タイマー開始'
+                    : kitchenFinished
+                    ? '終了を確認'
+                    : 'タイマー停止',
+              ),
             ),
           ],
         );
@@ -939,7 +1141,11 @@ class _CookingScreenState extends State<CookingScreen> {
   @override
   Widget build(BuildContext context) {
     final timerSeconds = step['timer_seconds'] as int?;
-    final heat = step['heat'] as String?;
+    final heat = step['heat'] == null
+        ? null
+        : widget.recipe
+              .renderText(step['heat'] as List<dynamic>, widget.cookingContext)
+              .displayText;
     return PopScope(
       canPop: allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -1123,15 +1329,24 @@ class _CookingScreenState extends State<CookingScreen> {
                                   ),
                                 ],
                               ),
-                              if (deadline != null) ...[
+                              Text(
+                                '${widget.cookingContext.targetServings}人分で調理中',
+                                key: const Key('cooking_servings'),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: _rustDark,
+                                ),
+                              ),
+                              if (_timerVisible) ...[
                                 const SizedBox(height: 10),
                                 Semantics(
                                   liveRegion: true,
                                   child: Text(
-                                    '$timerStep：${timerFinished ? 'タイマー終了・仕上がりを確認' : '残り ${_remaining()}秒'}',
+                                    '$_timerStepName：${_timerHasFinished ? 'タイマー終了・仕上がりを確認' : '残り ${_remaining()}秒'}',
                                     key: const Key('timer_status'),
                                     style: TextStyle(
-                                      color: timerFinished
+                                      color: _timerHasFinished
                                           ? Theme.of(context).colorScheme.error
                                           : _rustDark,
                                       fontWeight: FontWeight.bold,
@@ -1152,7 +1367,12 @@ class _CookingScreenState extends State<CookingScreen> {
                               ),
                               const SizedBox(height: 18),
                               Text(
-                                step['instruction'] as String,
+                                widget.recipe
+                                    .renderText(
+                                      step['instruction'] as List<dynamic>,
+                                      widget.cookingContext,
+                                    )
+                                    .displayText,
                                 style: const TextStyle(
                                   fontSize: 22,
                                   height: 1.55,
@@ -1174,7 +1394,10 @@ class _CookingScreenState extends State<CookingScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     for (final text
-                                        in widget.recipe.ingredientsFor(step))
+                                        in widget.recipe.ingredientsFor(
+                                          step,
+                                          widget.cookingContext,
+                                        ))
                                       Padding(
                                         padding: const EdgeInsets.only(
                                           bottom: 3,
@@ -1219,7 +1442,12 @@ class _CookingScreenState extends State<CookingScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      step['done_when'] as String,
+                                      widget.recipe
+                                          .renderText(
+                                            step['done_when'] as List<dynamic>,
+                                            widget.cookingContext,
+                                          )
+                                          .displayText,
                                       style: const TextStyle(
                                         fontSize: 18,
                                         height: 1.45,
@@ -1236,12 +1464,12 @@ class _CookingScreenState extends State<CookingScreen> {
                                 ),
                               for (final task in step['parallel_tasks'] as List)
                                 Text(
-                                  '並行作業：$task',
+                                  '並行作業：${widget.recipe.renderText(task as List<dynamic>, widget.cookingContext).displayText}',
                                   style: const TextStyle(fontSize: 16),
                                 ),
                               if (step['next_preview'] != null)
                                 Text(
-                                  '次の工程：${step['next_preview']}',
+                                  '次の工程：${widget.recipe.renderText(step['next_preview'] as List<dynamic>, widget.cookingContext).displayText}',
                                   style: const TextStyle(fontSize: 16),
                                 ),
                             ],

@@ -1,13 +1,26 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [string]$KeystorePath,
 
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
-    [string]$KeyAlias = 'recipe-cooking-navigator'
+    [string]$KeyAlias = 'recipe-cooking-navigator',
+
+    [switch]$PublicAiV2Ready
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'local-signing.ps1')
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+if ($PublicAiV2Ready) {
+    & (Join-Path $PSScriptRoot 'validate-public-ai.ps1') -Repository $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Public AI contract verification failed.' }
+}
+if (-not [string]::IsNullOrWhiteSpace($KeystorePath)) {
+    throw 'Register the existing key with Setup-Signing.cmd, then use Build-Release.cmd without keystore arguments.'
+}
+$savedSigning = Read-LocalSigningProfile -App recipe -Repository $repoRoot
+$KeystorePath = $savedSigning.StoreFile
+$KeyAlias = $savedSigning.KeyAlias
 
 function ConvertTo-PlainText {
     param(
@@ -56,7 +69,7 @@ $previousEnvironment = @{
 
 $password = $null
 try {
-    $securePassword = Read-Host 'Keystore password' -AsSecureString
+    $securePassword = $savedSigning.StorePassword
     $password = ConvertTo-PlainText $securePassword
     if ([string]::IsNullOrWhiteSpace($password)) {
         throw 'The keystore password cannot be empty.'
@@ -65,8 +78,8 @@ try {
     $env:RCN_RELEASE_STORE_FILE = $resolvedKeystorePath
     $env:RCN_RELEASE_STORE_PASSWORD = $password
     $env:RCN_RELEASE_KEY_ALIAS = $KeyAlias
-    $env:RCN_RELEASE_KEY_PASSWORD = $password
-    $env:GRADLE_OPTS = (($previousEnvironment.GradleOpts, '-Dorg.gradle.daemon=false') -join ' ').Trim()
+    $env:RCN_RELEASE_KEY_PASSWORD = Convert-SigningPassword $savedSigning.KeyPassword
+    $env:GRADLE_OPTS = (($previousEnvironment.GradleOpts, '-Dorg.gradle.daemon=false -Dorg.gradle.configuration-cache=false') -join ' ').Trim()
 
     & $keytoolCommand.Source `
         -list `
@@ -78,11 +91,14 @@ try {
         throw 'Keystore password or key alias verification failed. Check the saved release-signing information.'
     }
 
-    & $flutterWrapper build apk --release
+    $releaseArgs = @('build', 'apk', '--release')
+    if ($PublicAiV2Ready) { $releaseArgs += '--dart-define=RCN_PUBLIC_AI_V2_READY=true' }
+    & $flutterWrapper @releaseArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Flutter release build failed with exit code $LASTEXITCODE."
     }
 
+    Assert-RegisteredApkSigner -ApkPath $apkPath -Profile $savedSigning -Repository $repoRoot
     & $verifyScript -ApkPath $apkPath -WriteChecksum
     if ($LASTEXITCODE -ne 0) {
         throw "Release verification failed with exit code $LASTEXITCODE."

@@ -17,7 +17,7 @@ void main() {
 
   setUpAll(() async {
     validator = RecipeValidator.fromSchemaString(
-      await File('schemas/recipe-v1.schema.json').readAsString(),
+      await File('schemas/recipe-v2.schema.json').readAsString(),
     );
     recipeSource = await File('examples/recipe-example.json').readAsString();
   });
@@ -369,6 +369,49 @@ void main() {
       expect(stateStore.state.receipts.single.recipeId, 'ginger-pork-001');
     },
   );
+
+  test('does not let an old receipt skip validation of a v1 file', () async {
+    const receipt = RecipeInboxReceipt(
+      documentId: 'legacy-document',
+      sha256:
+          'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+      recipeId: 'ginger-pork-001',
+      revision: 1,
+    );
+    final stateStore = _MemoryRecipeInboxStateStore.withState(
+      const RecipeInboxState(
+        folder: RecipeInboxFolder(
+          treeUri: 'content://provider/tree/inbox',
+          displayName: 'Inbox',
+        ),
+        receipts: <RecipeInboxReceipt>[receipt],
+      ),
+    );
+    final existing = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final controller = _controller(
+      validator,
+      _MemoryRecipeDocumentStore([existing]),
+      _FakeRecipeInboxPlatform(
+        files: const <RecipeInboxFile>[
+          RecipeInboxFile(
+            documentId: 'legacy-document',
+            name: 'legacy.json',
+            source: '{"schema_version":"1.0.0","type":"recipe","recipe":{}}',
+            sha256: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+          ),
+        ],
+      ),
+      stateStore,
+      recipeSource,
+    );
+    await controller.load();
+
+    final result = await controller.checkInbox();
+
+    expect(result.rejectedCount, 1);
+    expect(result.files.single.message, contains('旧形式'));
+    expect(stateStore.state.receipts, hasLength(1));
+  });
 
   test('rejects malformed file metadata without poisoning receipts', () async {
     final stateStore = _MemoryRecipeInboxStateStore.withFolder();

@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   collection: ^1.19.1
+  crypto: ^3.0.7
   file_selector: ^1.1.0
   flutter:
     sdk: flutter
@@ -25,4 +26,11 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - schemas/recipe-v1.schema.json
+    - schemas/recipe-v2.schema.json
+    - schemas/feedback-v2.schema.json
+    - schemas/feedback-evidence-v1.schema.json
+    - schemas/cooking-profile-v1.schema.json
+    - schemas/cooking-profile-v1.1.schema.json
+    - schemas/preference-candidates-v1.schema.json
+    - schemas/preference-operation-v1.schema.json
+    - schemas/profile-history-v1.schema.json

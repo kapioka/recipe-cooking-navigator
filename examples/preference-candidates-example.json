@@ -1,0 +1,34 @@
+{
+  "type": "preference_candidates",
+  "candidates": [
+    {
+      "rules_version": "1.0.0",
+      "scope": {
+        "value": "主菜",
+        "kind": "category"
+      },
+      "dimension": "saltiness",
+      "direction": -1,
+      "score": 4,
+      "feedback_ids": [
+        "feedback-example-001",
+        "feedback-example-002",
+        "feedback-example-003"
+      ],
+      "session_ids": [
+        "session-example-001",
+        "session-example-002",
+        "session-example-003"
+      ],
+      "recipe_ids": [
+        "recipe-example-001",
+        "recipe-example-002"
+      ],
+      "categories": [
+        "主菜"
+      ],
+      "status": "proposed"
+    }
+  ],
+  "candidate_schema_version": "1.0.0"
+}

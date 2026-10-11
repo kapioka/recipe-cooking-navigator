@@ -68,8 +68,10 @@ ChatGPTへ共有
 
 ## JSON Schema
 
-- [Recipe Schema v1](schemas/recipe-v1.schema.json)
-- [Feedback Schema v1](schemas/feedback-v1.schema.json)
+- [Recipe Schema v2](schemas/recipe-v2.schema.json)
+- [Feedback Schema v2](schemas/feedback-v2.schema.json)
+
+v1 Schemaは公開済み履歴として残しています。現行アプリはv1を自動変換せず、v2用の指示で再作成したRecipeを別保存領域へ取り込みます。
 
 ## サンプル
 
@@ -84,12 +86,13 @@ ChatGPTへ共有
 - 端末内保存と同一Recipeの複数Revision保持
 - レシピ一覧、料理名・食材・タグ検索、ローカルタグ編集
 - 材料、器具、事前準備、全体工程の確認
+- 対応範囲内の人数変更と、材料・工程・TTSで一貫した分量表示
 - 1工程ずつのCooking mode、工程一覧、中断位置の保存・再開
 - 音声操作、現在工程の読み上げ、ユーザー起動タイマー
 - Cooking mode中の画面常時点灯と終了時の解除
 - 調理完了時の最小Cook Session記録
 
-次の主要バージョンでは、Android Sharesheet受信、`active` Revision管理、事前準備のチェック、調理後評価、Feedback JSON共有、過去Versionからの改善ループを追加します。詳細は[ロードマップ](docs/roadmap.md)を参照してください。
+次の段階では、Kitchen modeと共通タイマーを整えた後、調理後評価、Feedback JSON共有、過去Versionからの改善ループへ進みます。詳細は[ロードマップ](docs/roadmap.md)を参照してください。
 
 ## 共有方針
 
@@ -163,9 +166,9 @@ Recipe Cooking Navigatorは以下を行いません。
 
 ## 現在の状態
 
-FlutterによるAndroid初期版を実装済みです。Pixel 10aでファイル取り込み、保存データを維持した更新、Cooking mode、TTS、音声操作、タイマー、中断・再開を確認しています。
+FlutterによるAndroid初期版を実装済みです。Recipe / Feedback Schema v2と人数変更はローカル実装・自動検証・Pixel 10a実機確認済みです。配布用ChatGPT Project Packageはv2のローカル出力まで完了し、Project実設定の切替と生成Recipeの往復確認が残っています。公開版`0.1.0`についてはPixel 10aでファイル取り込み、保存データを維持した更新、Cooking mode、TTS、音声操作、タイマー、中断・再開を確認しています。
 
-調理後評価、Feedback JSON共有、`active` Revision切り替え、SNS共有、バックアップ、iOS版は未実装です。また、調理雑音下での音声認識精度は引き続き実機検証が必要です。
+調理後評価・Feedback v2共有・選択Versionの改善依頼、KitchenとProfile履歴の基盤を実装しています。ChatGPTへの標準共有/コピー依頼は公開v2契約の照合後に有効化します。独立したSign in with ChatGPT PoCは`poc/siwc_android`にあり、本体との統合は実機での認証・完了推論成功後に進めます。SNS共有、バックアップ、iOS版は未実装です。調理雑音下での音声認識精度、TalkBack、長時間点灯、Kitchenの背景動作、Profileの実運用は未確認です。
 
 ## 開発・検証
 

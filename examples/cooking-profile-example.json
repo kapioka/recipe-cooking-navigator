@@ -1,0 +1,25 @@
+{
+  "profile_schema_version": "1.0.0",
+  "type": "cooking_profile",
+  "profile_id": "profile-example-001",
+  "revision": 2,
+  "updated_at": "2026-10-04T00:00:00Z",
+  "preferences": [
+    {
+      "direction": -1,
+      "dimension": "saltiness",
+      "feedback_ids": [
+        "feedback-example-001",
+        "feedback-example-002",
+        "feedback-example-003"
+      ],
+      "rules_version": "1.0.0",
+      "scope": {
+        "value": "主菜",
+        "kind": "category"
+      },
+      "confirmed_at": "2026-10-04T00:00:00Z"
+    }
+  ],
+  "explicit_constraints": []
+}

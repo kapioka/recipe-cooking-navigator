@@ -8,6 +8,10 @@ abstract interface class RecipeVersionStateStore {
   Future<void> saveActiveRevision(String recipeId, int revision);
 }
 
+abstract interface class RecipeVersionStateDeletionStore {
+  Future<void> deleteRecipe(String recipeId);
+}
+
 class RecipeVersionStateStorageException implements Exception {
   const RecipeVersionStateStorageException(this.message, [this.cause]);
 
@@ -18,7 +22,8 @@ class RecipeVersionStateStorageException implements Exception {
   String toString() => message;
 }
 
-class MemoryRecipeVersionStateStore implements RecipeVersionStateStore {
+class MemoryRecipeVersionStateStore
+    implements RecipeVersionStateStore, RecipeVersionStateDeletionStore {
   MemoryRecipeVersionStateStore([Map<String, int>? initial])
     : _activeRevisions = Map<String, int>.from(initial ?? const {});
 
@@ -33,9 +38,15 @@ class MemoryRecipeVersionStateStore implements RecipeVersionStateStore {
     _validateEntry(recipeId, revision);
     _activeRevisions[recipeId] = revision;
   }
+
+  @override
+  Future<void> deleteRecipe(String recipeId) async {
+    _activeRevisions.remove(recipeId);
+  }
 }
 
-class FileRecipeVersionStateStore implements RecipeVersionStateStore {
+class FileRecipeVersionStateStore
+    implements RecipeVersionStateStore, RecipeVersionStateDeletionStore {
   FileRecipeVersionStateStore(this.file);
 
   static const storageVersion = 1;
@@ -59,6 +70,14 @@ class FileRecipeVersionStateStore implements RecipeVersionStateStore {
       await _writeActiveRevisions(activeRevisions);
     });
   }
+
+  @override
+  Future<void> deleteRecipe(String recipeId) => _synchronize(() async {
+    final revisions = await _readActiveRevisions();
+    if (revisions.remove(recipeId) != null) {
+      await _writeActiveRevisions(revisions);
+    }
+  });
 
   Future<Map<String, int>> _readActiveRevisions() async {
     final source = await _readableSource();

@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kapioka/recipe-cooking-navigator/schemas/recipe-v2.schema.json",
+  "title": "Recipe Cooking Navigator Recipe v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "type", "recipe"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "type": {"const": "recipe"},
+    "recipe": {"$ref": "#/$defs/recipe"}
+  },
+  "$defs": {
+    "recipeText": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "text"],
+            "properties": {
+              "type": {"const": "text"},
+              "text": {"type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S"}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "amount_id"],
+            "properties": {
+              "type": {"const": "amount_ref"},
+              "amount_id": {"type": "string", "minLength": 1, "pattern": "\\S"}
+            }
+          }
+        ]
+      }
+    },
+    "rational": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "denominator": {"type": "integer", "minimum": 1, "maximum": 1000}
+      }
+    },
+    "measuredQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "unit", "scaling"],
+      "properties": {
+        "kind": {"const": "measured"},
+        "value": {"$ref": "#/$defs/rational"},
+        "unit": {
+          "enum": ["g", "kg", "ml", "l", "tsp", "tbsp", "piece", "slice", "clove", "stalk", "sheet", "pack", "bunch"]
+        },
+        "scaling": {"enum": ["linear", "fixed"]},
+        "adjustment_note": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scaling": {"const": "fixed"}}, "required": ["scaling"]},
+          "then": {"required": ["adjustment_note"]}
+        }
+      ]
+    },
+    "qualitativeQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "text", "adjustment_note"],
+      "properties": {
+        "kind": {"const": "qualitative"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S"},
+        "adjustment_note": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S"}
+      }
+    },
+    "quantity": {
+      "oneOf": [
+        {"$ref": "#/$defs/measuredQuantity"},
+        {"$ref": "#/$defs/qualitativeQuantity"}
+      ]
+    },
+    "ingredient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "name": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "note": {"$ref": "#/$defs/recipeText"}
+      }
+    },
+    "amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ingredient_id", "label", "quantity"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "ingredient_id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "label": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S"},
+        "quantity": {"$ref": "#/$defs/quantity"},
+        "note": {"$ref": "#/$defs/recipeText"}
+      }
+    },
+    "utensil": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "quantity"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "name": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "quantity": {"type": "integer", "minimum": 1},
+        "reuse_note": {"$ref": "#/$defs/recipeText"}
+      }
+    },
+    "amountIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "pattern": "\\S"}
+    },
+    "prepTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "amount_ids"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "text": {"$ref": "#/$defs/recipeText"},
+        "amount_ids": {"$ref": "#/$defs/amountIds"}
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "instruction", "amount_ids", "done_when", "utensil_ids", "parallel_tasks"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "title": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "instruction": {"$ref": "#/$defs/recipeText"},
+        "amount_ids": {"$ref": "#/$defs/amountIds"},
+        "heat": {"$ref": "#/$defs/recipeText"},
+        "timer_seconds": {"type": "integer", "minimum": 1},
+        "done_when": {"$ref": "#/$defs/recipeText"},
+        "utensil_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "pattern": "\\S"}
+        },
+        "parallel_tasks": {"type": "array", "items": {"$ref": "#/$defs/recipeText"}},
+        "next_preview": {"$ref": "#/$defs/recipeText"}
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "steps"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "title": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/step"}}
+      }
+    },
+    "adjustment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition", "action"],
+      "properties": {
+        "condition": {"$ref": "#/$defs/recipeText"},
+        "action": {"$ref": "#/$defs/recipeText"}
+      }
+    },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "title", "servings", "serving_adjustment", "total_time_minutes", "estimated_difficulty", "ingredients", "amounts", "overview", "utensils", "preparation", "stages", "adjustments"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "revision": {"type": "integer", "minimum": 1},
+        "parent_revision": {"type": ["integer", "null"], "minimum": 1},
+        "title": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "servings": {"type": "integer", "minimum": 1, "maximum": 12},
+        "serving_adjustment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_servings", "max_servings", "note"],
+          "properties": {
+            "min_servings": {"type": "integer", "minimum": 1, "maximum": 12},
+            "max_servings": {"type": "integer", "minimum": 1, "maximum": 12},
+            "note": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S"}
+          }
+        },
+        "total_time_minutes": {"type": "integer", "minimum": 1},
+        "estimated_difficulty": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["score", "reason"],
+          "properties": {
+            "score": {"type": "integer", "minimum": 1, "maximum": 5},
+            "reason": {"type": "string", "minLength": 1, "pattern": "\\S"}
+          }
+        },
+        "ingredients": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ingredient"}},
+        "amounts": {"type": "array", "minItems": 1, "maxItems": 256, "items": {"$ref": "#/$defs/amount"}},
+        "overview": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/recipeText"}},
+        "utensils": {"type": "array", "items": {"$ref": "#/$defs/utensil"}},
+        "preparation": {"type": "array", "items": {"$ref": "#/$defs/prepTask"}},
+        "stages": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/stage"}},
+        "adjustments": {"type": "array", "items": {"$ref": "#/$defs/adjustment"}},
+        "storage_note": {"$ref": "#/$defs/recipeText"},
+        "lunchbox_note": {"$ref": "#/$defs/recipeText"},
+        "revision_summary": {"type": "array", "items": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+      }
+    }
+  }
+}

@@ -41,6 +41,14 @@ app.*.map.json
 
 # Android release signing material must stay outside the repository.
 **/*.p12
+*.jks
+*.keystore
+*.pfx
+.env
+.env.*
+!.env.example
+*.signing.clixml
+*.signing.clixml.*
 
 # Android Studio will place build artifacts here
 /android/app/debug

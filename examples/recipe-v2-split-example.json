@@ -1,0 +1,30 @@
+{
+  "schema_version": "2.0.0",
+  "type": "recipe",
+  "recipe": {
+    "id": "split-seasoning-001",
+    "revision": 1,
+    "parent_revision": null,
+    "title": "分量配分の例",
+    "servings": 2,
+    "serving_adjustment": {"min_servings": 1, "max_servings": 4, "note": "味を確認しながら仕上げ量を調整する。"},
+    "total_time_minutes": 10,
+    "estimated_difficulty": {"score": 1, "reason": "分量参照の例示用"},
+    "ingredients": [{"id": "sauce", "name": "たれ"}, {"id": "salt", "name": "塩"}],
+    "amounts": [
+      {"id": "sauce-base", "ingredient_id": "sauce", "label": "加熱用", "quantity": {"kind": "measured", "value": {"numerator": 30, "denominator": 1}, "unit": "g", "scaling": "linear"}},
+      {"id": "sauce-finish", "ingredient_id": "sauce", "label": "仕上げ用", "quantity": {"kind": "measured", "value": {"numerator": 70, "denominator": 1}, "unit": "g", "scaling": "linear"}},
+      {"id": "sauce-taste", "ingredient_id": "sauce", "label": "仕上げ調整", "quantity": {"kind": "qualitative", "text": "適量", "adjustment_note": "濃度を見ながら加える。"}},
+      {"id": "salt-finish", "ingredient_id": "salt", "label": "仕上げ用", "quantity": {"kind": "qualitative", "text": "少々", "adjustment_note": "味見をして必要な場合だけ加える。"}}
+    ],
+    "overview": [[{"type": "text", "text": "たれを加熱し、味を調える"}]],
+    "utensils": [{"id": "pan", "name": "フライパン", "quantity": 1}],
+    "preparation": [{"id": "prep-sauce", "text": [{"type": "amount_ref", "amount_id": "sauce-base"}, {"type": "text", "text": "を量る。"}], "amount_ids": ["sauce-base"]}],
+    "stages": [{"id": "stage-main", "title": "加熱", "steps": [
+      {"id": "step-heat", "title": "加熱する", "instruction": [{"type": "amount_ref", "amount_id": "sauce-base"}, {"type": "text", "text": "を加熱する。"}], "amount_ids": ["sauce-base"], "done_when": [{"type": "text", "text": "温まる"}], "utensil_ids": ["pan"], "parallel_tasks": []},
+      {"id": "step-finish", "title": "仕上げる", "instruction": [{"type": "amount_ref", "amount_id": "sauce-finish"}, {"type": "text", "text": "を加え、"}, {"type": "amount_ref", "amount_id": "sauce-taste"}, {"type": "text", "text": "と"}, {"type": "amount_ref", "amount_id": "salt-finish"}, {"type": "text", "text": "で調える。"}], "amount_ids": ["sauce-finish", "sauce-taste", "salt-finish"], "done_when": [{"type": "text", "text": "味が整う"}], "utensil_ids": ["pan"], "parallel_tasks": []}
+    ]}],
+    "adjustments": [],
+    "revision_summary": []
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kapioka.github.io/recipe-cooking-navigator/schemas/feedback-evidence-v1.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["evidence_schema_version", "type", "feedback_id", "created_at", "categories", "confirmed_intents", "feedback"],
+  "properties": {
+    "evidence_schema_version": {"const": "1.0.0"}, "type": {"const": "feedback_evidence"},
+    "feedback_id": {"type": "string", "pattern": "\\S"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "categories": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "\\S"}},
+    "confirmed_intents": {"type": "object", "propertyNames": {"enum": ["sweetness", "saltiness", "umami", "spiciness", "acidity", "richness", "aroma", "texture"]}, "additionalProperties": {"enum": [-1, 1]}},
+    "feedback": {"$ref": "feedback-v2.schema.json"}
+  }
+}
