@@ -34,6 +34,19 @@ status=completedの確認後だけ返し、途中の失敗や未完了は拒否�
 音声/文字起こしAPI、previous_response_id、hosted toolsや非対応parameterは使わない。
 [Preview制限](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
 
+本体の初回生成QAでは「レシピ内容が読み取れない」とユーザーが報告した。
+回答本文は記録していないため、説明文の混入・途切れ・構文不正のどれかは未確定。
+レシピ形式の契約を`instructions`へ、確認済み希望・選択Feedbackを`input`へ分離し、
+共有/コピー手順は今回のアプリ内生成とは別の説明であることを明記した。
+公開Responsesの`text.format: {type: "json_object"}`を本体だけに指定する。
+[JSON mode](https://developers.openai.com/api/docs/guides/structured-outputs)は構文の指定であり、
+Recipe Schemaへの適合・参照整合を保証しない。引き続き同じValidatorで拒否・確認保存する。
+SIWCのPreview制限は`instructions`を許可し、`text`を禁止項目に含めていないが、
+選択モデルでのJSON modeと正常Recipe生成は実機で確認する。非対応時の自動再送信は行わない。
+失敗時は固定分類と受信文字数・構文位置だけを表示する。回答、parser本文、Schemaの値、
+認証情報は表示・保存・ログ出力しない。修正版の本体201/PoC22テストと両analyzeは合格。
+PR #13はDraftのまま維持し、本体生成QAの問題が解消するまでmainへmergeしない。
+
 更新tokenを直列化し、access/refresh/expiry/scopesを一括安全保管する。接続解除時は
 遠隔revocationを試み、失敗しても端末tokenを消し「遠隔失効未確認」を表示する。
 Plusの5時間枠は他アプリと共有で、Proには同じ5時間制限は適用されない。対象条件・

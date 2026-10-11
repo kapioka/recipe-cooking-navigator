@@ -7,6 +7,7 @@ import '../application/recipe_ai_client.dart';
 import '../application/recipe_library_controller.dart';
 import '../domain/ai_recipe_prompt.dart';
 import '../domain/ai_recipe_request.dart';
+import '../domain/ai_recipe_response_diagnostic.dart';
 
 class ConnectedRecipeScreen extends StatefulWidget {
   const ConnectedRecipeScreen({
@@ -115,9 +116,11 @@ class _ConnectedRecipeScreenState extends State<ConnectedRecipeScreen> {
     final prompt = await _loadPrompt();
     if (!mounted) return;
     setState(() => _status = 'レシピを生成しています。完了後に形式を検証します。');
+    final submission = prompt.build(widget.request, confirmedText);
     final result = await _client.infer(
       model,
-      prompt.build(widget.request, confirmedText),
+      submission.input,
+      instructions: submission.instructions,
     );
     if (!mounted) return;
     final preparation = await prepareAiRecipe(
@@ -132,7 +135,9 @@ class _ConnectedRecipeScreenState extends State<ConnectedRecipeScreen> {
     }
     _preview = preparation.preview;
     _status = _preview == null
-        ? preparation.message
+        ? preparation.errorCode == null
+              ? preparation.message
+              : describeAiRecipeFailure(result, preparation.errorCode!)
         : '対応形式のレシピを受信しました。内容を確認してから保存してください。';
   });
   Future<void> _save() => _run(() async {

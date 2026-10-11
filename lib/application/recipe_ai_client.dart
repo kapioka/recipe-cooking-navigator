@@ -12,7 +12,11 @@ abstract class RecipeAiClient {
   Future<void> selectAccount(String id);
   Future<List<({String slug, String name})>> listModels();
   Future<String?> dictate();
-  Future<String> infer(String model, String prompt);
+  Future<String> infer(
+    String model,
+    String input, {
+    required String instructions,
+  });
   Future<bool> disconnect();
   Future<void> openUsage();
   void cancel();
@@ -54,8 +58,16 @@ class AndroidRecipeAiClient implements RecipeAiClient {
   @override
   Future<String?> dictate() => _runtime.platform.dictate();
   @override
-  Future<String> infer(String model, String prompt) =>
-      _runtime.infer(model, prompt);
+  Future<String> infer(
+    String model,
+    String input, {
+    required String instructions,
+  }) => _runtime.infer(
+    model,
+    input,
+    instructions: instructions,
+    jsonObject: true,
+  );
   @override
   Future<bool> disconnect() => _runtime.disconnect();
   @override

@@ -151,20 +151,28 @@ Map<String, dynamic> inferenceBody(
   String model,
   String text, {
   int maxChars = 4000,
+  String? instructions,
+  bool jsonObject = false,
 }) {
   if (model.isEmpty ||
       text.trim().isEmpty ||
-      text.length > maxChars ||
+      text.length + (instructions?.length ?? 0) > maxChars ||
+      (instructions != null && instructions.trim().isEmpty) ||
       maxChars > 256000) {
     throw SiwcFailure('モデルと1〜$maxChars文字の確認済みテキストが必要です。');
   }
   return {
     'model': model,
+    'instructions': ?instructions,
     'input': [
       {'role': 'user', 'content': text.trim()},
     ],
     'store': false,
     'stream': true,
+    if (jsonObject)
+      'text': {
+        'format': {'type': 'json_object'},
+      },
   };
 }
 

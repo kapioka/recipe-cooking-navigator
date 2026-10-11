@@ -12,6 +12,7 @@ import 'package:recipe_cooking_navigator/data/recipe_tag_store.dart';
 import 'package:recipe_cooking_navigator/data/recipe_version_state_store.dart';
 import 'package:recipe_cooking_navigator/domain/ai_recipe_prompt.dart';
 import 'package:recipe_cooking_navigator/domain/ai_recipe_request.dart';
+import 'package:recipe_cooking_navigator/domain/ai_recipe_response_diagnostic.dart';
 import 'package:recipe_cooking_navigator/domain/feedback_validator.dart';
 import 'package:recipe_cooking_navigator/domain/recipe_validator.dart';
 import 'package:recipe_cooking_navigator/ui/connected_recipe_screen.dart';
@@ -54,6 +55,7 @@ class _Client implements RecipeAiClient {
   String response = '普通の回答です';
   Completer<String>? pending;
   final prompts = <String>[];
+  final instructionsSent = <String>[];
   int cancels = 0;
   @override
   bool get connected => true;
@@ -78,8 +80,13 @@ class _Client implements RecipeAiClient {
   @override
   Future<String?> dictate() async => '卵で一人分。安全に加熱してください。';
   @override
-  Future<String> infer(String model, String prompt) async {
+  Future<String> infer(
+    String model,
+    String prompt, {
+    required String instructions,
+  }) async {
     prompts.add(prompt);
+    instructionsSent.add(instructions);
     return pending?.future ?? response;
   }
 
@@ -157,9 +164,10 @@ void main() {
     'direct prompt carries canonical schema and only selected request data',
     () {
       final text = prompt.build(request, '編集後の希望');
-      expect(text, contains(schema));
-      expect(text, contains('"confirmed_request":"編集後の希望"'));
-      expect(text, isNot(contains('selected_feedback')));
+      expect(text.instructions, contains(schema));
+      expect(text.instructions, isNot(contains('編集後の希望')));
+      expect(text.input, contains('"confirmed_request":"編集後の希望"'));
+      expect(text.input, isNot(contains('selected_feedback')));
       expect(() => prompt.build(request, ' '), throwsFormatException);
       final improvement = AiRecipeRequest.improve(
         feedback: feedback,
@@ -169,8 +177,50 @@ void main() {
         ),
       );
       final improvementText = prompt.build(improvement, '追加の希望');
-      expect(improvementText, contains(jsonEncode(feedback)));
-      expect(improvementText, contains('next_revision'));
+      expect(improvementText.input, contains(jsonEncode(feedback)));
+      expect(
+        improvementText.instructions,
+        isNot(contains(jsonEncode(feedback))),
+      );
+      expect(improvementText.instructions, contains('next_revision'));
+    },
+  );
+  test(
+    'failed answer diagnostics classify format without exposing contents',
+    () {
+      final cases = <(String, RecipeImportErrorCode, String)>[
+        (
+          '秘密の説明文 {"password":"secret"}',
+          RecipeImportErrorCode.malformedJson,
+          '説明文・対応外の囲み',
+        ),
+        (
+          '```\n{"secret":true}\n```',
+          RecipeImportErrorCode.malformedJson,
+          '説明文・対応外の囲み',
+        ),
+        (
+          '{"private":"secret"',
+          RecipeImportErrorCode.malformedJson,
+          '本文末尾で途切れ',
+        ),
+        ('{"private":"secret",}', RecipeImportErrorCode.malformedJson, '構文不正'),
+        ('["secret"]', RecipeImportErrorCode.invalidRoot, 'オブジェクト以外'),
+        (
+          '```json\n{"private":"secret"}\n```',
+          RecipeImportErrorCode.schemaViolation,
+          '必須情報・形式・参照の不一致',
+        ),
+      ];
+      for (final (source, code, expected) in cases) {
+        final diagnostic = describeAiRecipeFailure(source, code);
+        expect(diagnostic, contains(expected));
+        expect(diagnostic, contains('受信文字: ${source.length}'));
+        expect(diagnostic, isNot(contains('secret')));
+        expect(diagnostic, isNot(contains('private')));
+        expect(diagnostic, isNot(contains('password')));
+        expect(diagnostic, isNot(contains('秘密')));
+      }
     },
   );
   test(

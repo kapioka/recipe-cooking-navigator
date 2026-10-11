@@ -49,11 +49,13 @@ class RecipeImportPreparation {
     required this.status,
     required this.message,
     this.preview,
+    this.errorCode,
   });
 
   final RecipeImportPreparationStatus status;
   final String message;
   final RecipeImportPreview? preview;
+  final RecipeImportErrorCode? errorCode;
 }
 
 class RecipeImportResult {
@@ -404,6 +406,7 @@ class RecipeLibraryController extends ChangeNotifier {
       return RecipeImportPreparation(
         status: RecipeImportPreparationStatus.failed,
         message: error.message,
+        errorCode: error.code,
       );
     } catch (_) {
       _finishPreparedImport();

@@ -1,6 +1,6 @@
 # Issue #7 → #8 current checkpoint
 
-2026-10-11。PR #9/#10/#11/#12をmain `35c67c1b46fdaf8be841b92d0cb35507a672f8db`までmerge済み。現在は別worktreeの`codex/siwc-recipe-integration`でWP-04本体連携の機械検証と正式署名APK更新が完了。本体での認証・レシピ生成の実機QA待ち。
+2026-10-11。PR #9/#10/#11/#12をmain `35c67c1b46fdaf8be841b92d0cb35507a672f8db`までmerge済み。現在は別worktreeの`codex/siwc-recipe-integration`でWP-04本体連携を修正中。PR #13はDraft。本体生成の実機QAでRecipe読込エラーの報告があり、mergeは保留している。
 
 ## 許可と保存境界
 
@@ -32,3 +32,19 @@
 実装正本は C:\Users\akiso\.codex\worktrees\issues-7-8-publish\recipe-cooking-navigator の feature branch。元のdirty作業ツリーを上書きせず保持している。本体から生成/改善する画面を追加し、正本Schema/Workflowを同梱して本文へ添付、共通Validatorと保存前プレビューへ合流した。AIの普通の回答は保存しない。保存時もactiveと過去Revisionを保持する。PoCは一般の通信確認だけであり、雛形を強制する本体生成とは区別する。本体全200テスト、formatter、analyze、debug build、正式署名build合格。PoC21テスト、analyze、共有adapter化後のdebug buildも合格。releaseキャッシュに残る旧R:参照で一度失敗したが、生成済みキャッシュを退避しstable pathで再生成して解消。正本Schema/Workflow等6 assetのAPK内一致、native channelと復帰待ちmethodを確認した。現端末の既存証明書と照合してadb install -rで更新し、起動processと致命的例外なし、return intentの本体activity解決を確認。回転設定は0/0を保持。本体OAuth/Recipe生成実機QAはユーザー操作待ち。
 
 本体連携APK: build/app/outputs/flutter-apk/app-release-siwc-recipe-integration.apk（元作業フォルダー）。66039623 bytes、SHA256 AFFE43EFCCC81C6F0C14412C889F7F8E65C63A47F0B73836A4C28933EDC3995B。0.1.0+1。既存と同じ正式証明書。旧本体APKとPoC APKも保持する。ユーザーに本体の「ChatGPTでレシピを作る」→条件入力→「依頼内容を確認」→「アプリ内で生成する」→本体初回接続→「確定して送信」→プレビュー→「確認して保存」を案内済み。
+
+## 本体生成QAの修復
+
+ユーザーが「レシピ内容が読み取れない。正しい形式で書き出して」と報告した。
+本文を記録していないため原因の分類は未確定。送信を`instructions`（正本形式・Workflow）と
+`input`（確認済み希望・選択Feedback）へ分離し、本体だけJSON object出力を指定した。
+形式失敗には固定分類・受信文字数・構文位置を追加し、本文やparserの例外内容は表示しない。
+Validatorを緩めず、未完了・不正形式・ID不一致は保存しない。
+本体201テスト、PoC22テスト、両analyze、formatter（102 files / 変更なし）、正式署名build合格。
+既存版の証明書を再取得・照合し、`adb install -r`で本体を更新した。
+署名・zipalign・非debuggable、起動processと致命的例外なし、回転設定0/0を確認。
+最新APKは元作業フォルダーの`build/app/outputs/flutter-apk/app-release-siwc-json-format.apk`。
+66039623 bytes、SHA256 `19EDD2D13896B1C94B4570833ACEC936D9541BF454CC1D9848BEE1D8A34842E3`。
+0.1.0+1、従来と同じ正式証明書。旧APKも保持。修正版での生成とプレビューはユーザー確認待ち。
+再開時はこのworktreeの現在の差分とPR #13を使用し、重複PRを作らない。
+次のゲートは修正版APK更新後の生成→プレビュー→明示保存。成功までPR #13のmergeを保留。
