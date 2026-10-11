@@ -1,6 +1,6 @@
 # Issue #7 → #8 current checkpoint
 
-2026-10-11。PR #9/#10/#11/#12をmain `35c67c1b46fdaf8be841b92d0cb35507a672f8db`までmerge済み。現在は別worktreeの`codex/siwc-recipe-integration`でWP-04本体連携を修正中。PR #13はDraft。本体生成の実機QAでRecipe読込エラーの報告があり、mergeは保留している。
+2026-10-11。PR #9/#10/#11/#12をmain `35c67c1b46fdaf8be841b92d0cb35507a672f8db`までmerge済み。別worktreeの`codex/siwc-recipe-integration`でWP-04本体連携を修正し、最新APKでユーザーが「保存できた」と確認。本体の生成→形式検証→プレビュー→確認保存のゲートを通過し、承認済みのPR #13 main mergeへ進める。
 
 ## 許可と保存境界
 
@@ -54,6 +54,8 @@ Validatorを緩めず、未完了・不正形式・ID不一致は保存しない
 最新APKは`build/app/outputs/flutter-apk/app-release-siwc-instructions.apk`（元作業フォルダー）。
 66039623 bytes、SHA256 `F5ECC9F59E3255DF39C39ACF088A21A4C8C6C4242D3EC9D86F0509F870B13D41`。
 0.1.0+1、既存と同じ正式証明書を再照合し`adb install -r`成功。旧APKも保持。
-PR #13はDraftを保持し、修正版での生成→プレビュー→確認保存はユーザーQA待ち。
+最新APKでユーザーが「保存できた」と確認。本体の生成→形式検証→プレビュー→確認保存は実機合格。
+Recipe内容の品質、選択Version改善、音声入力・認識品質、期限更新/アカウント切替等は未確認。
 再開時はこのworktreeの現在の差分とPR #13を使用し、重複PRを作らない。
-次のゲートは修正版APK更新後の生成→プレビュー→明示保存。成功までPR #13のmergeを保留。
+本体生成の修復ゲートは通過した。既存のmain merge承認に従い、PR #13を更新してmergeする。
+Issue #7/#8は残る端末QAがあるため閉じない。
