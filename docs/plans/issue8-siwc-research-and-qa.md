@@ -34,6 +34,24 @@ status=completedの確認後だけ返し、途中の失敗や未完了は拒否�
 音声/文字起こしAPI、previous_response_id、hosted toolsや非対応parameterは使わない。
 [Preview制限](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
 
+本体の初回生成QAでは「レシピ内容が読み取れない」とユーザーが報告した。
+回答本文は記録していないため、説明文の混入・途切れ・構文不正のどれかは未確定。
+レシピ形式の契約を`instructions`へ、確認済み希望・選択Feedbackを`input`へ分離し、
+共有/コピー手順は今回のアプリ内生成とは別の説明であることを明記した。
+公開Responsesの[JSON mode](https://developers.openai.com/api/docs/guides/structured-outputs)を
+指定する版ではユーザーがHTTP 400を報告した。サーバーの拒否項目は未確定だが、
+追加した`text.format`を除去し、SIWC Previewで明示許可された`instructions`と元の
+model/input/store/streamだけへ戻す。共有PoCの通常テキスト送信も変更しない。
+HTTP 400には既知のparameter/codeだけを固定の日本語へ変換する診断を追加した。
+サーバーmessage・未知のparameter/codeは表示しない。自動再送信は行わない。
+失敗時は固定分類と受信文字数・構文位置だけを表示する。回答、parser本文、Schemaの値、
+認証情報は表示・保存・ログ出力しない。Validatorを緩めず拒否・確認保存を維持する。
+本体201テストと追加通信診断を含むPoC23テスト、両analyze、formatter、正式署名build合格。
+出力指定を除去した修正版を既存証明書と照合し、Pixelへデータを保持して更新済み。
+出力指定を除去した最新APKでは、ユーザーが「保存できた」と確認した。
+本体生成→形式検証→プレビュー→確認保存の実機ゲートを通過し、承認済みPR #13 mergeへ進める。
+選択Version改善、内容品質・食品安全の実使用判断、音声入力、再起動/期限更新などの実機QAは未確認。
+
 更新tokenを直列化し、access/refresh/expiry/scopesを一括安全保管する。接続解除時は
 遠隔revocationを試み、失敗しても端末tokenを消し「遠隔失効未確認」を表示する。
 Plusの5時間枠は他アプリと共有で、Proには同じ5時間制限は適用されない。対象条件・
@@ -50,8 +68,10 @@ Plusの5時間枠は他アプリと共有で、Proには同じ5時間制限は�
 | Dart HttpServer + native bridge | このPoC | IPv4 loopback、公開OAuth、joseで署名検証、AndroidKeyStore | 実機検証用に採用。正式サポート断定なし |
 
 PoCだけに追加した依存はcrypto 3.0.7、jose 0.3.5+2（pub.dev APIでは2026-03-31公開）。
-JOSEの暗号処理を自作せず既存ライブラリで検証する。依存はPoCのpubspec/lockへ
-隔離し、本体へ認証dependency・APIキー・Cookie・Codex credentialを追加しない。
+JOSEの暗号処理を自作せず既存ライブラリで検証する。PoC段階では依存をPoCへ隔離した。
+実機成功後の本体統合では公開SIWC adapterを`packages/siwc_client`へ共通化し、
+同じ署名・identity検証と通信テストをPoCから継続実行する。
+APIキー・Cookie・Codex credentialは追加しない。
 パッケージの利用条件はそれぞれの公開licenseに従う。pub.dev metadataはリリース日で
 あり、repositoryの最終commit日時やAndroid正式対応の証拠にはしない。
 GitHub APIも2026-10-11に確認した。chatgpt-auth-kit-flutterは2026-05-10作成、
@@ -68,7 +88,27 @@ GitHub APIも2026-10-11に確認した。chatgpt-auth-kit-flutterは2026-05-10�
 - 音声は[RecognizerIntent](https://developer.android.com/reference/android/speech/RecognizerIntent)
   で文字起こしし、同じ編集欄へ入れる。枠内で修正でき、「確定して送信」だけが
   推論を開始する。認識providerによるネット通信はあり得ることをUIへ表示する。
-- このPoCはテキスト推論だけ。本体のRecipe生成・Revision保存へはまだ接続しない。
+- このPoCは一般のテキスト通信確認だけ。レシピ形式を強制しない。
+  本体のRecipe生成・Revision保存は次の統合画面で扱う。
+
+## 本体統合（実機PoC成功後）
+
+- `ConnectedRecipeScreen`は本体の新規依頼、またはユーザーが選択したFeedbackから開く。
+  PoCとはpackage・暗号化ファイル・鍵・host ID・登録identityを共有しない。本体での接続同意が必要。
+- 公式SIWCではbrowser/hosted toolsを使えないため、URLだけを指定せず、同梱された
+  正本Recipe/Feedback Schema・対象Workflow・連携仕様・構造例を依頼へ全文添付する。
+  初期テキストと音声入力は枠内で編集でき、確定送信だけが通信を開始する。
+- 完了テキストを既存RecipeValidator/prepareImportSourceへ合流させる。普通の回答、
+  不正JSON、未対応形式は保存しない。新規は新ID・revision 1・parent null、改善は
+  選択ID・改善元parent・要求next_revisionの一致と元履歴の存在を確認する。
+- 材料・分量・工程をプレビューし、保存は明示確認のみ。履歴は追加で保持し、
+  AI改善版の保存では現在のactiveを維持する。暗黙のlatest選択も追加前に安全保管し、
+  その保存に失敗した場合は新Revisionを保存しない。
+- 多重送信/保存を抑止し、キャンセル・画面終了後の回答を保存しない。
+  起動し直しても確認途中の回答を自動で再送信・保存しない。共有/コピー/手動取込は維持する。
+- Androidの安全保管はcloud backupとdevice transferから除外する。Recipe等の保存データは
+  変更・消去せず、Cooking音声/TTSが使用中は追加のdictationを始めない。
+- 本体でのOAuth→レシピ生成→内容確認→保存、および選択Revision改善は実機QAの次の確認対象。
 
 ## 再現できる機械検証
 

@@ -29,6 +29,14 @@ class RecipeImportException implements Exception {
   String toString() => message;
 }
 
+/// Remove only the existing, unambiguous outer transport wrapper.
+String unwrapRecipeJson(String source) {
+  final trimmed = source.trim();
+  final fence = RegExp(r'^```json\s*\r?\n([\s\S]*?)\r?\n```$')
+      .firstMatch(trimmed);
+  return fence?.group(1) ?? trimmed;
+}
+
 class RecipeValidator {
   RecipeValidator._(this._schema);
 
@@ -47,10 +55,7 @@ class RecipeValidator {
     try {
       // Accept only a whole document or an unambiguous outer JSON fence.
       // Explanations, nested fences and guessed/repaired JSON are rejected.
-      final trimmed = source.trim();
-      final fence = RegExp(r'^```json\s*\r?\n([\s\S]*?)\r?\n```$')
-          .firstMatch(trimmed);
-      decoded = jsonDecode(fence?.group(1) ?? trimmed);
+      decoded = jsonDecode(unwrapRecipeJson(source));
     } on FormatException {
       throw const RecipeImportException(
         RecipeImportErrorCode.malformedJson,

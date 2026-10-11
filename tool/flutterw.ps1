@@ -9,7 +9,7 @@ $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $workspaceDrive = 'R:'
 $workspaceRoot = "$workspaceDrive\"
 
-if (Test-Path -LiteralPath $workspaceRoot) {
+if ($repoRoot -match '[^\x00-\x7F]' -and (Test-Path -LiteralPath $workspaceRoot)) {
     throw "The temporary Flutter workspace drive is already in use: $workspaceDrive"
 }
 
@@ -29,12 +29,18 @@ if (($env:Path -split ';') -notcontains $flutterBin) {
 }
 
 $driveMapped = $false
+$previousGradleOptions = $env:GRADLE_OPTS
 try {
-    & subst.exe $workspaceDrive $repoRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to map $workspaceDrive to the repository."
+    $env:GRADLE_OPTS = ($previousGradleOptions + ' -Dorg.gradle.daemon=false -Dorg.gradle.vfs.watch=false').Trim()
+    if ($repoRoot -match '[^\x00-\x7F]') {
+        & subst.exe $workspaceDrive $repoRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to map $workspaceDrive to the repository."
+        }
+        $driveMapped = $true
+    } else {
+        $workspaceRoot = $repoRoot
     }
-    $driveMapped = $true
 
     Push-Location -LiteralPath $workspaceRoot
     try {
@@ -44,6 +50,7 @@ try {
         Pop-Location
     }
 } finally {
+    $env:GRADLE_OPTS = $previousGradleOptions
     if ($driveMapped) {
         & subst.exe $workspaceDrive /D
     }

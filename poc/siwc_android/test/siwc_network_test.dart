@@ -84,6 +84,45 @@ class TestClient implements HttpClient {
 }
 
 void main() {
+  test(
+    'HTTP error diagnoses known fields without displaying server contents',
+    () async {
+      for (final parameter in ['text.format', 'private-account-secret']) {
+        final response = jsonEncode({
+          'error': {
+            'param': parameter,
+            'code': 'unsupported_parameter',
+            'message': 'secret response with private values',
+          },
+        });
+        final network = HttpSiwcNetwork(
+          client: TestClient(TestResponse(400, 'application/json', response)),
+        );
+        await expectLater(
+          network.infer('fake-access', inferenceBody('detected', 'confirmed')),
+          throwsA(
+            isA<SiwcFailure>().having(
+              (error) => error.message,
+              'safe HTTP error',
+              allOf(
+                contains('HTTP 400'),
+                contains('未対応の指定'),
+                isNot(contains('secret')),
+                isNot(contains('private values')),
+                parameter == 'text.format'
+                    ? contains('出力形式')
+                    : isNot(contains('account')),
+              ),
+            ),
+          ),
+        );
+      }
+      expect(
+        safeHttpFailure(400, utf8.encode('secret-not-json')),
+        isNot(contains('secret')),
+      );
+    },
+  );
   test('successful SSE validates completion with 201 or omitted media header and UTF8 length', () async {
     final body =
         'data: ${jsonEncode({

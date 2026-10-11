@@ -155,6 +155,31 @@ void main() {
     expect(() => inferenceBody('model', ' '), throwsA(isA<SiwcFailure>()));
   });
 
+  test('recipe format instructions are explicit and bounded', () {
+    final body = inferenceBody(
+      'detected-model',
+      '{"wish":"egg"}',
+      instructions: 'Return Recipe JSON only.',
+    );
+    expect(body['instructions'], 'Return Recipe JSON only.');
+    expect(body['input'], [
+      {'role': 'user', 'content': '{"wish":"egg"}'},
+    ]);
+    expect(body.containsKey('text'), isFalse);
+    expect(body['store'], isFalse);
+    expect(body['stream'], isTrue);
+    expect(body.containsKey('max_output_tokens'), isFalse);
+    expect(
+      () => inferenceBody(
+        'model',
+        'short',
+        instructions: 'oversize',
+        maxChars: 8,
+      ),
+      throwsA(isA<SiwcFailure>()),
+    );
+  });
+
   test('stream text is retained but requires a validated completion', () async {
     final delta =
         'data: ${jsonEncode({'type': 'response.output_text.delta', 'delta': 'こんにちは'})}';

@@ -33,6 +33,15 @@ class RecipeImportPreview {
   int get totalTimeMinutes => _document.totalTimeMinutes;
   int get ingredientCount => _document.ingredients.length;
   int get stepCount => _document.steps.length;
+  List<String> get ingredientDetails => [
+    for (final amount in _document.amounts)
+      _document.amountLine(amount.id, _document.contextFor(servings)),
+  ];
+  List<String> get stepDetails => [
+    for (final step in _document.steps)
+      '${step['title']}: ${_document.renderText(step['instruction'] as List, _document.contextFor(servings)).displayText}'
+          '${step['done_when'] is List ? '\n完了の目安: ${_document.renderText(step['done_when'] as List, _document.contextFor(servings)).displayText}' : ''}',
+  ];
 }
 
 class RecipeImportPreparation {
@@ -40,11 +49,13 @@ class RecipeImportPreparation {
     required this.status,
     required this.message,
     this.preview,
+    this.errorCode,
   });
 
   final RecipeImportPreparationStatus status;
   final String message;
   final RecipeImportPreview? preview;
+  final RecipeImportErrorCode? errorCode;
 }
 
 class RecipeImportResult {
@@ -395,6 +406,7 @@ class RecipeLibraryController extends ChangeNotifier {
       return RecipeImportPreparation(
         status: RecipeImportPreparationStatus.failed,
         message: error.message,
+        errorCode: error.code,
       );
     } catch (_) {
       _finishPreparedImport();
@@ -428,8 +440,9 @@ class RecipeLibraryController extends ChangeNotifier {
   }
 
   Future<RecipeImportResult> confirmPreparedImport(
-    RecipeImportPreview preview,
-  ) async {
+    RecipeImportPreview preview, {
+    bool preserveActive = false,
+  }) async {
     if (!identical(preview, _pendingFileImport)) {
       return const RecipeImportResult(
         RecipeImportStatus.failed,
@@ -437,7 +450,9 @@ class RecipeLibraryController extends ChangeNotifier {
       );
     }
     try {
-      return await _importDocument(preview._document);
+      return _resultFor(
+        await _saveDocument(preview._document, preserveActive: preserveActive),
+      );
     } on RecipeStorageException catch (error) {
       return RecipeImportResult(RecipeImportStatus.failed, error.message);
     } catch (_) {
@@ -713,11 +728,6 @@ class RecipeLibraryController extends ChangeNotifier {
     return _resultFor(outcome);
   }
 
-  Future<RecipeImportResult> _importDocument(RecipeDocument document) async {
-    final outcome = await _saveDocument(document);
-    return _resultFor(outcome);
-  }
-
   RecipeImportResult _resultFor(_RecipeSaveOutcome outcome) {
     final document = outcome.document;
 
@@ -743,16 +753,33 @@ class RecipeLibraryController extends ChangeNotifier {
   Future<_RecipeSaveOutcome> _saveSource(String source) =>
       _saveDocument(_validator.validateSource(source));
 
-  Future<_RecipeSaveOutcome> _saveDocument(RecipeDocument document) =>
-      _synchronizeLibraryMutation(() async {
-        final storeResult = await _store.saveDocument(document.raw);
-        if (storeResult == StoreRecipeResult.added) {
-          _documents = [..._documents, document];
-          _rebuildLatestRecipes();
-          notifyListeners();
-        }
-        return _RecipeSaveOutcome(document, storeResult);
+  Future<_RecipeSaveOutcome> _saveDocument(
+    RecipeDocument document, {
+    bool preserveActive = false,
+  }) => _synchronizeLibraryMutation(() async {
+    // AI revision approval must not move an implicit latest-as-active choice.
+    // Persist the current choice before adding a revision; failure stops save.
+    final currentActive = activeRecipeFor(document.id);
+    if (preserveActive &&
+        currentActive != null &&
+        !_activeRevisionsByRecipeId.containsKey(document.id)) {
+      await _recipeVersionStateStore.saveActiveRevision(
+        document.id,
+        currentActive.revision,
+      );
+      _activeRevisionsByRecipeId = Map.unmodifiable({
+        ..._activeRevisionsByRecipeId,
+        document.id: currentActive.revision,
       });
+    }
+    final storeResult = await _store.saveDocument(document.raw);
+    if (storeResult == StoreRecipeResult.added) {
+      _documents = [..._documents, document];
+      _rebuildLatestRecipes();
+      notifyListeners();
+    }
+    return _RecipeSaveOutcome(document, storeResult);
+  });
 
   Future<T> _synchronizeLibraryMutation<T>(Future<T> Function() action) {
     final previous = _libraryMutationTail;

@@ -14,10 +14,11 @@ try {
     # can leave Gradle's daemon holding stale native-source path information.
     if ($pocRoot -match '[^\x00-\x7F]') {
         if (Test-Path -LiteralPath 'R:\') { throw 'Temporary drive R: is already in use.' }
-        & subst.exe R: $pocRoot
+        $pocRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+        & subst.exe R: $pocRepository
         if ($LASTEXITCODE -ne 0) { throw 'Could not map isolated PoC.' }
         $pocMapped = $true
-        $pocWorkingPath = 'R:\'
+        $pocWorkingPath = 'R:\poc\siwc_android'
     }
     Push-Location -LiteralPath $pocWorkingPath
     try { & $pocFlutter @pocArgs; $pocExit = $LASTEXITCODE }

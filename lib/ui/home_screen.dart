@@ -164,8 +164,9 @@ class HomeScreenState extends State<HomeScreen> {
                                   ? null
                                   : () => Navigator.of(context).push(
                                       MaterialPageRoute<void>(
-                                        builder: (_) =>
-                                            const AiRecipeRequestScreen(),
+                                        builder: (_) => AiRecipeRequestScreen(
+                                          library: controller,
+                                        ),
                                       ),
                                     ),
                               child: const Text('ChatGPTでレシピを作る'),
