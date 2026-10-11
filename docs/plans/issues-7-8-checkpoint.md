@@ -1,6 +1,6 @@
 # Issue #7 → #8 current checkpoint
 
-2026-10-11。PR #9をmain `6beee26983a019c2a94028c20e331da73a46d1d5`へmerge済み。戻り方案内は `codex/siwc-poc-return-guidance` で改善。
+2026-10-11。PR #9をmain `6beee26983a019c2a94028c20e331da73a46d1d5`へmerge済み。戻り方案内はPR #10をmain `822676710980fb73933e1eef939d39bdd3dd45d9`へmerge済み。
 
 ## 許可と保存境界
 
@@ -23,3 +23,5 @@
 4. 初心者向けにブラウザの日本語「アプリに戻る」ボタン、具体的なAndroid戻り操作、固定した画面上部の状態表示を実装。帰還リンクは秘密情報を持たず、OAuth callbackはloopbackを維持。全13テスト、analyze、debug buildが合格。新しいPoC APKのインストールと実機での戻り方・認証結果はUSB復帰待ち。
 
 #7/#8のIssueは端末QA・本体統合まで完了していない。再開heartbeatはPAUSED。状態が変わらない間の再実行・通知は行わない。
+
+新しいPoC APK: 152887688 bytes、SHA256 `89F4485DE372FDE301D4A63606285549EBF2EFC67091156FDB9B7B277847F639`。署名SHA256は初回PoCと同じ `7AA732625167931013B4B19A40D358D2A4273AD181BBC8ADC04DDE5FDE40D7C2`。

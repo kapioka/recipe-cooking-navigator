@@ -44,7 +44,7 @@ ChatGPTは`type: "recipe"`のRecipe JSONだけを生成する。
 
 改善は既存の評価画面でCook Session・改善元Version・目標を明示選択し、「選択した評価でChatGPTに改善を依頼」から検証済みFeedbackだけを依頼文へ添付する。従来の「Feedbackを共有」は従来どおりJSONのみを送る。
 
-回答はホームの「レシピを貼り付け」、共有受信、ファイル選択から同じRecipeValidatorとprepare/confirmへ合流する。キャンセル・不正入力では保存しない。公開mainは2026-10-11時点でv1、手元consumerはv2のため送信は標準で無効。v2 Schema・例・Router・Workflow・連携仕様の整合公開と確認後だけ`--dart-define=RCN_PUBLIC_AI_V2_READY=true`で有効化する。このフラグは公開済みとの自動判定ではない。端末QA・一般公開・main mergeは別ゲート。
+回答はホームの「レシピを貼り付け」、共有受信、ファイル選択から同じRecipeValidatorとprepare/confirmへ合流する。キャンセル・不正入力では保存しない。2026-10-11にv2 Schema・例・Router・Workflow・連携仕様をmainへ整合反映した。送信は標準で無効にし、`tool/validate-public-ai.ps1`で公開内容と対応アプリの一致を確認した場合だけ、`tool/build-release.ps1 -PublicAiV2Ready`から`--dart-define=RCN_PUBLIC_AI_V2_READY=true`で有効化する。このフラグは公開済みとの自動判定ではない。端末QA・一般公開・main mergeは別ゲート。
 
 ### iOS将来対応
 
