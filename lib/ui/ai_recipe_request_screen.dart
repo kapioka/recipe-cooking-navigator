@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/ai_recipe_request.dart';
+import '../application/recipe_library_controller.dart';
 import '../platform/ai_request_platform.dart';
+import 'connected_recipe_screen.dart';
 
 class AiRecipeRequestScreen extends StatefulWidget {
   const AiRecipeRequestScreen({
     this.improvementRequest,
     this.platform = const AndroidAiRequestPlatform(),
     this.publicReady = publicAiV2Ready,
+    this.library,
     super.key,
   });
 
   final AiRecipeRequest? improvementRequest;
   final AiRequestPlatform platform;
   final bool publicReady;
+  final RecipeLibraryController? library;
 
   @override
   State<AiRecipeRequestScreen> createState() => _AiRecipeRequestScreenState();
@@ -143,7 +147,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          '選択した内容だけを共有します。ChatGPTの回答をコピーし、レシピ一覧の「レシピを貼り付け」で取り込んでください。',
+          '依頼内容を確認し、アプリ内で生成するか、ChatGPTへの共有・コピーを選んでください。共有・コピーの場合は回答を「レシピを貼り付け」で取り込みます。',
         ),
         const SizedBox(height: 16),
         if (!widget.publicReady) ...[
@@ -167,7 +171,23 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen> {
         ],
         if (_request case final request?) ...[
           const SizedBox(height: 16),
-          const Text('送信する依頼文'),
+          if (widget.library case final library?)
+            FilledButton.icon(
+              key: const Key('open_connected_recipe'),
+              onPressed: _busy
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ConnectedRecipeScreen(
+                          request: request,
+                          library: library,
+                        ),
+                      ),
+                    ),
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('アプリ内で生成する'),
+            ),
+          const Text('共有・コピーする依頼文'),
           SelectableText(request.text, key: const Key('ai_request_preview')),
           const SizedBox(height: 16),
           FilledButton.icon(

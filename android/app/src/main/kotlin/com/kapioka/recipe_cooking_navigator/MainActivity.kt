@@ -22,6 +22,7 @@ class MainActivity : FlutterActivity() {
     private var inboxChannel: RecipeInboxChannel? = null
     private var feedbackArchiveChannel: FeedbackArchiveChannel? = null
     private var shareChannel: RecipeShareChannel? = null
+    private var siwcChannel: SiwcChannel? = null
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -107,6 +108,9 @@ class MainActivity : FlutterActivity() {
         feedbackArchiveChannel = FeedbackArchiveChannel(this, flutterEngine.dartExecutor.binaryMessenger)
         shareChannel = RecipeShareChannel(this, flutterEngine.dartExecutor.binaryMessenger)
         AiRequestChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+        siwcChannel = SiwcChannel(this, flutterEngine.dartExecutor.binaryMessenger) {
+            !cooking && !voiceWanted && !recognitionActive && !speaking
+        }
         shareChannel?.accept(intent)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "recipe/feedback")
             .setMethodCallHandler { call, result ->
@@ -272,6 +276,7 @@ class MainActivity : FlutterActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         inboxChannel?.onActivityResult(requestCode, resultCode, data)
         feedbackArchiveChannel?.onActivityResult(requestCode, resultCode, data)
+        siwcChannel?.onActivityResult(requestCode, resultCode, data)
     }
     private fun closeCooking() {
         cooking = false; voiceWanted = false; speaking = false
@@ -293,10 +298,12 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         foreground = true
+        siwcChannel?.onResume()
         updateScreenAwake()
     }
     override fun onPause() {
         foreground = false
+        siwcChannel?.onPause()
         updateScreenAwake()
         super.onPause()
     }
@@ -316,6 +323,7 @@ class MainActivity : FlutterActivity() {
         inboxChannel?.dispose()
         feedbackArchiveChannel?.dispose()
         shareChannel?.dispose()
+        siwcChannel?.dispose()
         closeCooking(); recognizer?.destroy(); tts?.shutdown(); super.onDestroy()
     }
 }

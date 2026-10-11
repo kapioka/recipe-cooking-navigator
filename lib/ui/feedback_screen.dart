@@ -309,7 +309,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => AiRecipeRequestScreen(improvementRequest: request),
+            builder: (_) => AiRecipeRequestScreen(
+              improvementRequest: request,
+              library: widget.controller,
+            ),
           ),
         );
       } else {

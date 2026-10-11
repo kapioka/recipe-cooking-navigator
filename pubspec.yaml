@@ -7,6 +7,8 @@ environment:
   sdk: ^3.13.2
 
 dependencies:
+  siwc_client:
+    path: packages/siwc_client
   collection: ^1.19.1
   crypto: ^3.0.7
   file_selector: ^1.1.0
@@ -26,6 +28,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - ai/workflows/generate.md
+    - ai/workflows/improve.md
+    - docs/chatgpt-integration.md
+    - examples/recipe-v2-split-example.json
     - schemas/recipe-v2.schema.json
     - schemas/feedback-v2.schema.json
     - schemas/feedback-evidence-v1.schema.json

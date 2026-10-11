@@ -1,0 +1,5 @@
+<full-backup-content>
+    <exclude domain="file" path="siwc.encrypted" />
+    <exclude domain="file" path="siwc.encrypted.bak" />
+    <exclude domain="file" path="siwc.encrypted.new" />
+</full-backup-content>

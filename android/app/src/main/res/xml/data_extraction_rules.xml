@@ -1,0 +1,12 @@
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="siwc.encrypted" />
+        <exclude domain="file" path="siwc.encrypted.bak" />
+        <exclude domain="file" path="siwc.encrypted.new" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="siwc.encrypted" />
+        <exclude domain="file" path="siwc.encrypted.bak" />
+        <exclude domain="file" path="siwc.encrypted.new" />
+    </device-transfer>
+</data-extraction-rules>

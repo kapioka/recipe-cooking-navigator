@@ -1,0 +1,11 @@
+name: siwc_client
+description: Shared public SIWC adapter for the Android app and isolated PoC.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ^3.13.2
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.7
+  jose: 0.3.5+2

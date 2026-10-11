@@ -1,6 +1,6 @@
 # Issue #7 → #8 current checkpoint
 
-2026-10-11。PR #9/#10/#11をmain `21e38c88a123338a47e29cf19d56731594a52972`までmerge済み。本再開点はPR #12のPoC復帰・通信・入力UI修正を含む。
+2026-10-11。PR #9/#10/#11/#12をmain `35c67c1b46fdaf8be841b92d0cb35507a672f8db`までmerge済み。現在は別worktreeの`codex/siwc-recipe-integration`でWP-04本体連携の機械検証と正式署名APK更新が完了。本体での認証・レシピ生成の実機QA待ち。
 
 ## 許可と保存境界
 
@@ -20,9 +20,15 @@
 
 1. #7: 公開mainの7ファイル一致を確認し、`tool/build-release.ps1 -PublicAiV2Ready`で正式署名APKを作成済み。0.1.0+1、60865980 bytes、SHA256 `F1EC07DE294674763859F91F1D460725C9985540AACC2912E54B90E34F9D1CAC`。登録証明書と現端末の既存版を再照合し、署名・zipalign・非debuggableを確認。2026-10-11 17:23 JSTに `adb install -r` 成功。
 2. #7: [端末QA](issue7-device-qa.md)に従い共有/コピーとChatGPT生成結果の往復を確認する。
-3. #8: [調査と端末QA](issue8-siwc-research-and-qa.md)に従い実機OAuth・モデル一覧・`response.completed`を確認する。OAuth・モデル取得・完了回答は実機で確認済み。次はWP-04の本体生成/Revision改善へ進む。失敗時は非公開APIへ迂回せず#7を維持する。
+3. #8: [調査と端末QA](issue8-siwc-research-and-qa.md)に従い実機OAuth・モデル一覧・`response.completed`を確認する。OAuth・モデル取得・完了回答は実機で確認済み。WP-04の本体生成/Revision改善を実装し、機械検証・正式署名APK更新を完了。本体での生成と保存を実機QAで確認する。失敗時は非公開APIへ迂回せず#7を維持する。
 4. 初心者向けの日本語「アプリに戻る」、具体的なAndroid戻り操作、画面上部の状態表示を実装。ユーザーは戻り操作とモデル一覧を確認。入力欄直下を「音声で入力」「確定して送信」の2ボタンへ変更し、枠内で修正できる説明をボタンの下へ配置。全21テスト、analyze、debug buildが合格し、インストール済み。
 
 #7/#8のIssueは端末QA・本体統合まで完了していない。再開heartbeatはPAUSED。状態が変わらない間の再実行・通知は行わない。
 
 最新PoC APK: `build/app/outputs/flutter-apk/app-siwc-poc-stream-text-debug.apk`（元作業フォルダーへ保存）。170245486 bytes、SHA256 `80FA0425ABFBFDAC27C728AD2958180334FB1D0A65FEE18C601CC378AC0E3AFF`。署名SHA256は初回PoCと同じ `7AA732625167931013B4B19A40D358D2A4273AD181BBC8ADC04DDE5FDE40D7C2`。本体APKは同フォルダーの `app-release-issues7-8.apk`。旧 `app-siwc-poc-foreground-debug.apk` はnative処理欠落のため使わない。
+
+## WP-04の実装と再開点
+
+実装正本は C:\Users\akiso\.codex\worktrees\issues-7-8-publish\recipe-cooking-navigator の feature branch。元のdirty作業ツリーを上書きせず保持している。本体から生成/改善する画面を追加し、正本Schema/Workflowを同梱して本文へ添付、共通Validatorと保存前プレビューへ合流した。AIの普通の回答は保存しない。保存時もactiveと過去Revisionを保持する。PoCは一般の通信確認だけであり、雛形を強制する本体生成とは区別する。本体全200テスト、formatter、analyze、debug build、正式署名build合格。PoC21テスト、analyze、共有adapter化後のdebug buildも合格。releaseキャッシュに残る旧R:参照で一度失敗したが、生成済みキャッシュを退避しstable pathで再生成して解消。正本Schema/Workflow等6 assetのAPK内一致、native channelと復帰待ちmethodを確認した。現端末の既存証明書と照合してadb install -rで更新し、起動processと致命的例外なし、return intentの本体activity解決を確認。回転設定は0/0を保持。本体OAuth/Recipe生成実機QAはユーザー操作待ち。
+
+本体連携APK: build/app/outputs/flutter-apk/app-release-siwc-recipe-integration.apk（元作業フォルダー）。66039623 bytes、SHA256 AFFE43EFCCC81C6F0C14412C889F7F8E65C63A47F0B73836A4C28933EDC3995B。0.1.0+1。既存と同じ正式証明書。旧本体APKとPoC APKも保持する。ユーザーに本体の「ChatGPTでレシピを作る」→条件入力→「依頼内容を確認」→「アプリ内で生成する」→本体初回接続→「確定して送信」→プレビュー→「確認して保存」を案内済み。

@@ -55,6 +55,8 @@ class RecipeShareChannel(
     }
 
     fun accept(intent: Intent?) {
+        // SIWC return navigation is not a Recipe file/share event.
+        if (intent?.data?.scheme == "rcn-siwc") return
         if (intent?.action != Intent.ACTION_SEND && intent?.action != Intent.ACTION_VIEW) return
         pending.addLast(intent)
         channel.invokeMethod("incoming", null)
