@@ -4,7 +4,7 @@
 
 ## Current-state contract
 
-- Implementation baseline: `91b815530d2ad63f102a8129a67305a8eec328a8`
+- Implementation baseline: `660fd0c161594966e32ca7a13363b96e4b3436f5`
 - Reconciled: 2026-10-11
 - 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
 - このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
@@ -24,7 +24,7 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映対象にはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoCが含まれる。
 
-本体195テスト、PoC15テストと静的解析・debug buildが合格。本体の正式署名APKとPoCをPixelへ更新し、本体起動を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWCはcallback後の認証コード交換で通信に失敗し、接続確認と安全な通信診断を追加した。実機OAuth/完了推論が成功するまで本体統合へ進めない。外部SNS/バックエンド/iOSは今回追加しない。
+本体195テスト、PoC21テストと静的解析・debug buildが合格。本体の正式署名APKとPoCをPixelへ更新し、本体起動を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWCはforeground復帰待ち・nativeビルド経路・ストリーム受信を修正し、実機でOAuth・モデル一覧・完了回答の受信をユーザーが確認。本体生成/Revision改善の統合は次の未達Outcome。入力欄直下は音声入力と確定送信の2ボタンで、枠内編集の説明を配置した。外部SNS/バックエンド/iOSは今回追加しない。
 
 ## Execution notes
 
