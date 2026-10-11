@@ -12,6 +12,8 @@ class FakePlatform implements PocPlatform {
   String? saved;
   String? speech;
   Uri? auth;
+  String? callbackPage;
+  String? callbackType;
   @override
   Future<String?> readSecure() async => saved;
   @override
@@ -34,9 +36,9 @@ class FakePlatform implements PocPlatform {
     );
     final client = HttpClient();
     try {
-      await (await client.getUrl(callback))
-          .close()
-          .then((response) => response.drain<void>());
+      final response = await (await client.getUrl(callback)).close();
+      callbackType = response.headers.contentType?.mimeType;
+      callbackPage = await response.transform(utf8.decoder).join();
     } finally {
       client.close(force: true);
     }
@@ -150,6 +152,14 @@ void main() {
     await runtime.initialize();
     final host = (jsonDecode(platform.saved!) as Map)['host_id'];
     await runtime.signIn();
+    expect(platform.callbackType, 'text/html');
+    expect(platform.callbackPage, contains('アプリに戻る'));
+    expect(platform.callbackPage, contains('package=com.kapioka.rcn_siwc_poc'));
+    expect(platform.callbackPage, isNot(contains('fake-code')));
+    expect(
+      platform.callbackPage,
+      isNot(contains(platform.auth!.queryParameters['state']!)),
+    );
     expect(runtime.canInfer, true);
     expect(runtime.accounts.single.id, 'issued');
     expect((await runtime.listModels()).map((m) => m.slug), ['detected']);

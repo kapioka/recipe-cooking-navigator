@@ -69,6 +69,7 @@ Schemaの構造・意味については`schemas/*.schema.json`を正本とする
 - unit / widget tests: `pwsh -File .\tool\flutterw.ps1 test`
 - Android debug build: `pwsh -File .\tool\flutterw.ps1 build apk --debug`
 - Issue #8独立PoCの検証: `pwsh -NoProfile -File .\tool\siwc-poc.ps1 analyze --no-pub`、`test --no-pub`、`build apk --debug --no-pub`。本体とは別packageで、詳細は`docs/plans/issue8-siwc-research-and-qa.md`に従う。
+- 公開AI v2契約の照合: `pwsh -NoProfile -File .\tool\validate-public-ai.ps1`。公開mainの対応ファイルと一致しない場合は失敗する。#7を有効にした正式署名buildは `pwsh -NoProfile -File .\tool\build-release.ps1 -PublicAiV2Ready` を使う。
 - Profile履歴のread-only検証: `dart run --verbosity=error tool/validate_profile_history.dart <Historyフォルダまたは全recordのJSON配列ファイル>`。成功時だけProfile JSONをstdoutへ出し、失敗時はexit 2。Driveの取得・更新は行わない。
 
 Windowsでは親パス`E:\\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介して実行する。wrapperは実行中だけ同じrepositoryをASCIIドライブへ割り当て、終了時に解除する。ソースは複製しない。

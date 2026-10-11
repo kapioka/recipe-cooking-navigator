@@ -81,10 +81,12 @@ debug検証専用であり、正式版の署名・公開を意味しない。
 ## ユーザー実機QA（後日）
 
 1. 別packageのPoC APKをinstallし、本体のデータを保持したまま並存することを確認。
-2. 「Continue with ChatGPT」→system browserで自分の適格なアカウントと権限を確認。
-   localhost画面に戻ったらPoCへ手動で戻る。モデル一覧が出ることを確認する。
+2. 「ChatGPTに接続」→system browserで自分の適格なアカウントと権限を確認。
+   ブラウザの「アプリに戻る」を押す。開かない場合はAndroidの戻る操作を使う。
+   接続状況はアプリ画面上部に表示する。モデル一覧が出ることを確認する。
 3. 検証用の短文だけを入力し「確定して送信」。response.completed検証済みの表示と
-   完了テキストが出ることが推論成功の証拠。HTTP 200だけでは合格にしない。
+   「完了した回答を受信しました」と回答が出ることが推論成功の証拠。
+   HTTP 200だけでは合格にしない。
 4. 音声入力→認識文の「修正」→確定。認識直後/修正中/空/キャンセル時は未送信。
 5. 認証の戻る/同意拒否、loopback中のバックグラウンド/復帰、PoC再起動、期限更新、
    再ログイン、account追加/切替、通信断、利用枠不足、接続解除を確認する。
@@ -94,6 +96,12 @@ debug検証専用であり、正式版の署名・公開を意味しない。
 端末の自動回転設定・固定方向は変更しない。PoCに常時点灯・Cooking音声/TTSはない。
 Androidのloopback listenerの寿命、Chrome復帰、Keystore復号、Recognizer実装差は
 build/unit testsだけでは証明できない。
+
+戻りボタンは[ChromeのIntentリンク](https://developer.chrome.com/docs/android/intents)と
+[AndroidのBROWSABLE filter](https://developer.android.com/training/app-links/create-deeplinks)
+を使い、PoCのpackageを指定する。戻りリンクにtoken/code/stateを含めず、OAuthの
+callbackは引き続きloopbackだけで受ける。SingleTaskとFlutter deep-link route無効化で
+既存の認証処理へ戻す。自動でブラウザを閉じるとは保証せず、押下と手動戻りを案内する。
 
 ## 次のゲート
 

@@ -38,7 +38,9 @@ class _PocScreenState extends State<PocScreen> {
       await widget.runtime.initialize();
       _ready = true;
       if (widget.runtime.canInfer) await _loadModels();
-      _message = '認証・推論の実機PoCです。Recipe保存・本体統合は行いません。';
+      _message = widget.runtime.canInfer
+          ? 'ChatGPTに接続しています。文章を確認し「確定して送信」を押してください。'
+          : 'まず「ChatGPTに接続」を押してください。ブラウザでの手続き後、このアプリに戻ります。';
     });
   }
 
@@ -73,13 +75,17 @@ class _PocScreenState extends State<PocScreen> {
   }
 
   Future<void> _login({bool newAccount = false}) => _run(() async {
+    setState(
+      () => _message =
+          'ブラウザで接続を確認してください。手続き後は「アプリに戻る」を押すか、Androidの「戻る」操作でここへ戻ってください。',
+    );
     await widget.runtime.signIn(newAccount: newAccount);
     _models = [];
     _model = null;
     if (widget.runtime.canInfer) await _loadModels();
     _message = widget.runtime.canInfer
-        ? 'identity検証済み・plan usage権限あり。推論の確定操作を待っています。'
-        : 'identity検証済みですが、plan usage権限がありません。';
+        ? 'ChatGPTへの接続が完了しました。文章を確認し「確定して送信」を押してください。'
+        : '本人確認はできましたが、ChatGPTの利用権限がありません。利用枠・権限を確認して再接続してください。';
   });
   Future<void> _dictate() => _run(() async {
     final recognized = await widget.runtime.platform.dictate();
@@ -97,169 +103,205 @@ class _PocScreenState extends State<PocScreen> {
       throw const SiwcFailure('実接続で取得したモデルを選んでください。');
     }
     _response = await widget.runtime.infer(selected, _text.text);
-    _message = 'response.completed検証済み。実機PoCの推論成功です。';
+    _message = '完了した回答を受信しました。下の回答を確認してください。';
   });
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Recipe SIWC PoC')),
-    body: ListView(
-      padding: const EdgeInsets.all(16),
+    body: Column(
       children: [
-        const Text(
-          '検証専用・別アプリ。ChatGPT Plus/Proの適格性と同意が必要です。利用枠は契約側で管理されます。会話履歴やMemoryは取得しません。',
-        ),
-        const SizedBox(height: 12),
-        if (widget.runtime.accounts.isNotEmpty)
-          DropdownButtonFormField<String>(
-            key: ValueKey('account-${widget.runtime.activeClientId}'),
-            initialValue: widget.runtime.activeClientId,
-            decoration: const InputDecoration(labelText: '登録済みアカウント'),
-            items: [
-              for (final account in widget.runtime.accounts)
-                DropdownMenuItem(
-                  value: account.id,
-                  child: Text(account.label, overflow: TextOverflow.ellipsis),
+        Card(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _busy ? '処理中です' : '接続と操作の状況',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-            ],
-            onChanged: _busy
-                ? null
-                : (id) {
-                    if (id != null) {
-                      _run(() async {
-                        widget.runtime.selectAccount(id);
-                        await widget.runtime.persistSelection();
-                        _models = [];
-                        _model = null;
-                        if (widget.runtime.canInfer) await _loadModels();
-                        _message = 'アカウントを切り替えました。';
-                      });
-                    }
-                  },
+                const SizedBox(height: 4),
+                Text(_message, key: const Key('status')),
+                if (_busy) ...[
+                  const SizedBox(height: 8),
+                  const LinearProgressIndicator(),
+                ],
+              ],
+            ),
           ),
-        FilledButton(
-          key: const Key('login'),
-          onPressed: _busy || !_ready ? null : () => _login(),
-          child: const Text('Continue with ChatGPT'),
         ),
-        TextButton(
-          onPressed: _busy || !_ready ? null : () => _login(newAccount: true),
-          child: const Text('アカウントを追加'),
-        ),
-        if (widget.runtime.connected) ...[
-          OutlinedButton(
-            onPressed: _busy
-                ? null
-                : () => _run(() async {
-                    await widget.runtime.refresh(force: true);
-                    _message = 'token更新完了（安全保管済み）。';
-                  }),
-            child: const Text('期限更新を検証'),
-          ),
-          TextButton(
-            onPressed: _busy
-                ? null
-                : () => _run(() async {
-                    final revoked = await widget.runtime.disconnect();
-                    _models = [];
-                    _model = null;
-                    _message = revoked
-                        ? '接続解除済み。登録とhost IDは保持しています。'
-                        : '端末内tokenを削除しました。遠隔失効は未確認です。ChatGPT設定でも接続解除してください。';
-                  }),
-            child: const Text('接続解除'),
-          ),
-        ],
-        TextButton(
-          onPressed: _busy
-              ? null
-              : () => _run(() async {
-                  await widget.runtime.platform.openBrowser(
-                    'https://chatgpt.com/settings/usage',
-                  );
-                }),
-          child: const Text('ChatGPTの利用枠・権限を確認'),
-        ),
-        if (_models.isNotEmpty)
-          DropdownButtonFormField<String>(
-            key: ValueKey('model-${widget.runtime.activeClientId}-$_model'),
-            initialValue: _model,
-            decoration: const InputDecoration(labelText: '利用可能なモデル'),
-            items: [
-              for (final model in _models)
-                DropdownMenuItem(value: model.slug, child: Text(model.name)),
-            ],
-            onChanged: _busy ? null : (value) => setState(() => _model = value),
-          ),
-        const SizedBox(height: 16),
-        TextField(
-          key: const Key('confirmed_text'),
-          controller: _text,
-          focusNode: _focus,
-          enabled: !_busy,
-          minLines: 3,
-          maxLines: 8,
-          maxLength: 4000,
-          decoration: const InputDecoration(
-            labelText: 'AIへ送るテキスト（編集可能）',
-            border: OutlineInputBorder(),
-          ),
-          onChanged: (_) => setState(() {
-            _response = null;
-            _message = '入力は未送信です。内容を確認して確定してください。';
-          }),
-        ),
-        const Text(
-          '音声認識はAndroidのサービスを使います。サービス・端末によってはネット通信があります。音声生データはこのOpenAI連携へ送信しません。',
-        ),
-        OutlinedButton(
-          key: const Key('dictate'),
-          onPressed: _busy || !_ready ? null : _dictate,
-          child: const Text('音声で文字入力'),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: TextButton(
-                key: const Key('edit'),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text(
+                '検証専用・別アプリ。ChatGPT Plus/Proの適格性と同意が必要です。利用枠は契約側で管理されます。会話履歴やMemoryは取得しません。',
+              ),
+              const SizedBox(height: 12),
+              if (widget.runtime.accounts.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  key: ValueKey('account-${widget.runtime.activeClientId}'),
+                  initialValue: widget.runtime.activeClientId,
+                  decoration: const InputDecoration(labelText: '登録済みアカウント'),
+                  items: [
+                    for (final account in widget.runtime.accounts)
+                      DropdownMenuItem(
+                        value: account.id,
+                        child: Text(
+                          account.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (id) {
+                          if (id != null) {
+                            _run(() async {
+                              widget.runtime.selectAccount(id);
+                              await widget.runtime.persistSelection();
+                              _models = [];
+                              _model = null;
+                              if (widget.runtime.canInfer) await _loadModels();
+                              _message = 'アカウントを切り替えました。';
+                            });
+                          }
+                        },
+                ),
+              FilledButton(
+                key: const Key('login'),
+                onPressed: _busy || !_ready ? null : () => _login(),
+                child: const Text('ChatGPTに接続'),
+              ),
+              TextButton(
+                onPressed: _busy || !_ready
+                    ? null
+                    : () => _login(newAccount: true),
+                child: const Text('アカウントを追加'),
+              ),
+              if (widget.runtime.connected) ...[
+                OutlinedButton(
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() async {
+                          await widget.runtime.refresh(force: true);
+                          _message = 'token更新完了（安全保管済み）。';
+                        }),
+                  child: const Text('期限更新を検証'),
+                ),
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() async {
+                          final revoked = await widget.runtime.disconnect();
+                          _models = [];
+                          _model = null;
+                          _message = revoked ? '接続解除済み。登録とhost IDは保持しています。' : '端末内tokenを削除しました。遠隔失効は未確認です。ChatGPT設定でも接続解除してください。';
+                        }),
+                  child: const Text('接続解除'),
+                ),
+              ],
+              TextButton(
                 onPressed: _busy
                     ? null
-                    : () {
-                        _focus.requestFocus();
-                        setState(() {
-                          _response = null;
-                          _message = '修正中です。確定するまで送信しません。';
-                        });
-                      },
-                child: const Text('修正'),
+                    : () => _run(() async {
+                        await widget.runtime.platform.openBrowser(
+                          'https://chatgpt.com/settings/usage',
+                        );
+                      }),
+                child: const Text('ChatGPTの利用枠・権限を確認'),
               ),
-            ),
-            Expanded(
-              child: FilledButton(
-                key: const Key('confirm_send'),
-                onPressed:
-                    _busy ||
-                        !widget.runtime.canInfer ||
-                        _model == null ||
-                        _text.text.trim().isEmpty
-                    ? null
-                    : _send,
-                child: const Text('確定して送信'),
+              if (_models.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  key: ValueKey(
+                    'model-${widget.runtime.activeClientId}-$_model',
+                  ),
+                  initialValue: _model,
+                  decoration: const InputDecoration(labelText: '利用可能なモデル'),
+                  items: [
+                    for (final model in _models)
+                      DropdownMenuItem(
+                        value: model.slug,
+                        child: Text(model.name),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() => _model = value),
+                ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('confirmed_text'),
+                controller: _text,
+                focusNode: _focus,
+                enabled: !_busy,
+                minLines: 3,
+                maxLines: 8,
+                maxLength: 4000,
+                decoration: const InputDecoration(
+                  labelText: 'AIへ送るテキスト（編集可能）',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {
+                  _response = null;
+                  _message = '入力は未送信です。内容を確認して確定してください。';
+                }),
               ),
-            ),
-          ],
-        ),
-        if (_busy)
-          TextButton(
-            key: const Key('cancel'),
-            onPressed: widget.runtime.cancel,
-            child: const Text('操作をキャンセル'),
+              const Text(
+                '音声認識はAndroidのサービスを使います。サービス・端末によってはネット通信があります。音声生データはこのOpenAI連携へ送信しません。',
+              ),
+              OutlinedButton(
+                key: const Key('dictate'),
+                onPressed: _busy || !_ready ? null : _dictate,
+                child: const Text('音声で文字入力'),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      key: const Key('edit'),
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              _focus.requestFocus();
+                              setState(() {
+                                _response = null;
+                                _message = '修正中です。確定するまで送信しません。';
+                              });
+                            },
+                      child: const Text('修正'),
+                    ),
+                  ),
+                  Expanded(
+                    child: FilledButton(
+                      key: const Key('confirm_send'),
+                      onPressed:
+                          _busy ||
+                              !widget.runtime.canInfer ||
+                              _model == null ||
+                              _text.text.trim().isEmpty
+                          ? null
+                          : _send,
+                      child: const Text('確定して送信'),
+                    ),
+                  ),
+                ],
+              ),
+              if (_busy)
+                TextButton(
+                  key: const Key('cancel'),
+                  onPressed: widget.runtime.cancel,
+                  child: const Text('操作をキャンセル'),
+                ),
+              if (_response case final response?)
+                SelectableText(response, key: const Key('completed_text')),
+              const SizedBox(height: 16),
+              const Text('非対応・利用枠不足の場合は本体アプリの共有／コピー／ファイル取り込みを利用してください。'),
+            ],
           ),
-        Text(_message, key: const Key('status')),
-        if (_response case final response?)
-          SelectableText(response, key: const Key('completed_text')),
-        const SizedBox(height: 16),
-        const Text('非対応・利用枠不足の場合は本体アプリの共有／コピー／ファイル取り込みを利用してください。'),
+        ),
       ],
     ),
   );
