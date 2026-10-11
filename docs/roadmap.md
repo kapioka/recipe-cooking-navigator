@@ -4,8 +4,8 @@
 
 ## Current-state contract
 
-- Implementation baseline: `52384ba2e72b144deb0db61c4c852bb69dfd3395`
-- Reconciled: 2026-09-27
+- Implementation baseline: `4fad5ae80aa91fb46d638e49ac4ade3f64554cc7`
+- Reconciled: 2026-10-11
 - 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
 - このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
 - Issue、PR、commit、Releaseは履歴・証拠であり、現在の再開地点を決める正本ではない。
