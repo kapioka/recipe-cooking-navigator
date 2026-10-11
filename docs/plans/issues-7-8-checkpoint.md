@@ -37,14 +37,23 @@
 
 ユーザーが「レシピ内容が読み取れない。正しい形式で書き出して」と報告した。
 本文を記録していないため原因の分類は未確定。送信を`instructions`（正本形式・Workflow）と
-`input`（確認済み希望・選択Feedback）へ分離し、本体だけJSON object出力を指定した。
+`input`（確認済み希望・選択Feedback）へ分離した。JSON object出力指定も追加したが、
+その版ではユーザーがHTTP 400を報告したため、追加の`text.format`は除去した。
+サーバーの拒否項目は未確定。明示許可されたinstructionsと元のmodel/input/store/streamへ戻す。
+HTTP 400は既知の拒否項目・codeだけを固定日本語で示し、サーバー本文や未知の値は表示しない。
 形式失敗には固定分類・受信文字数・構文位置を追加し、本文やparserの例外内容は表示しない。
 Validatorを緩めず、未完了・不正形式・ID不一致は保存しない。
 本体201テスト、PoC22テスト、両analyze、formatter（102 files / 変更なし）、正式署名build合格。
 既存版の証明書を再取得・照合し、`adb install -r`で本体を更新した。
 署名・zipalign・非debuggable、起動processと致命的例外なし、回転設定0/0を確認。
-最新APKは元作業フォルダーの`build/app/outputs/flutter-apk/app-release-siwc-json-format.apk`。
+400が出た指定版APKは元作業フォルダーの`build/app/outputs/flutter-apk/app-release-siwc-json-format.apk`。
 66039623 bytes、SHA256 `19EDD2D13896B1C94B4570833ACEC936D9541BF454CC1D9848BEE1D8A34842E3`。
-0.1.0+1、従来と同じ正式証明書。旧APKも保持。修正版での生成とプレビューはユーザー確認待ち。
+0.1.0+1、従来と同じ正式証明書。旧APKも保持。この版の生成QAはHTTP 400で失敗。
+出力指定除去版も本体analyze・PoC23テスト/analyze・formatter・正式署名buildが合格。
+本体201テストの既存検証を維持し、追加した共有通信診断をPoCで検証した。
+最新APKは`build/app/outputs/flutter-apk/app-release-siwc-instructions.apk`（元作業フォルダー）。
+66039623 bytes、SHA256 `F5ECC9F59E3255DF39C39ACF088A21A4C8C6C4242D3EC9D86F0509F870B13D41`。
+0.1.0+1、既存と同じ正式証明書を再照合し`adb install -r`成功。旧APKも保持。
+PR #13はDraftを保持し、修正版での生成→プレビュー→確認保存はユーザーQA待ち。
 再開時はこのworktreeの現在の差分とPR #13を使用し、重複PRを作らない。
 次のゲートは修正版APK更新後の生成→プレビュー→明示保存。成功までPR #13のmergeを保留。

@@ -24,6 +24,39 @@ String safeNetworkFailure(Object error) => switch (error) {
   _ => '処理を完了できません。秘密情報を表示せず停止しました。',
 };
 
+/// Decode only whitelisted enum values; never display the server message or an
+/// unknown parameter/code, which can contain request or credential contents.
+String safeHttpFailure(int status, List<int> bytes) {
+  String? parameter, code;
+  try {
+    final decoded = jsonDecode(utf8.decode(bytes));
+    final error = decoded is Map ? decoded['error'] : null;
+    if (error is Map) {
+      parameter = switch (error['param']) {
+        'text' || 'text.format' || 'text.format.type' => '出力形式',
+        'instructions' => 'レシピ形式の指示',
+        'input' => '依頼内容',
+        'model' => '選択モデル',
+        'store' || 'stream' => '送受信方式',
+        _ => null,
+      };
+      code = switch (error['code']) {
+        'unsupported_parameter' || 'unsupported_value' => '未対応の指定',
+        'invalid_value' || 'invalid_request_error' => '指定形式の不一致',
+        'context_length_exceeded' => '送信内容が長すぎます',
+        _ => null,
+      };
+    }
+  } catch (_) {
+    // Non-JSON and malformed errors use the same fixed HTTP status message.
+  }
+  final hints = [?parameter, ?code];
+  return status == 400
+      ? '公開サービスのHTTP 400エラーです。送信形式が受け付けられませんでした。'
+            '${hints.isEmpty ? '' : '（送信診断: ${hints.join(' / ')}）'}'
+      : '公開サービスのHTTP $statusエラーです。認証・利用枠・通信を確認してください。';
+}
+
 abstract class SiwcNetwork {
   Future<Map<String, dynamic>> getJson(Uri uri, {String? bearer});
   Future<Map<String, dynamic>> postForm(
@@ -67,9 +100,7 @@ class HttpSiwcNetwork implements SiwcNetwork {
       if (bytes.length > 1024 * 1024) throw const SiwcFailure('認証応答の上限を超えました。');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw SiwcFailure(
-        '公開サービスのHTTP ${response.statusCode}エラーです。認証・利用枠・通信を確認してください。',
-      );
+      throw SiwcFailure(safeHttpFailure(response.statusCode, bytes));
     }
     if (emptyOk && bytes.isEmpty) return {};
     final decoded = jsonDecode(utf8.decode(bytes));

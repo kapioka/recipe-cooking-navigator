@@ -152,7 +152,6 @@ Map<String, dynamic> inferenceBody(
   String text, {
   int maxChars = 4000,
   String? instructions,
-  bool jsonObject = false,
 }) {
   if (model.isEmpty ||
       text.trim().isEmpty ||
@@ -169,10 +168,6 @@ Map<String, dynamic> inferenceBody(
     ],
     'store': false,
     'stream': true,
-    if (jsonObject)
-      'text': {
-        'format': {'type': 'json_object'},
-      },
   };
 }
 

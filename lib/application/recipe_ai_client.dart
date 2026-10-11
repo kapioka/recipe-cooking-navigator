@@ -62,12 +62,7 @@ class AndroidRecipeAiClient implements RecipeAiClient {
     String model,
     String input, {
     required String instructions,
-  }) => _runtime.infer(
-    model,
-    input,
-    instructions: instructions,
-    jsonObject: true,
-  );
+  }) => _runtime.infer(model, input, instructions: instructions);
   @override
   Future<bool> disconnect() => _runtime.disconnect();
   @override

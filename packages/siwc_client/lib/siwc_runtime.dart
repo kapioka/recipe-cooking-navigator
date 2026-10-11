@@ -440,14 +440,12 @@ class SiwcRuntime {
     String model,
     String confirmedText, {
     String? instructions,
-    bool jsonObject = false,
   }) async {
     final body = inferenceBody(
       model,
       confirmedText,
       maxChars: maxInputChars,
       instructions: instructions,
-      jsonObject: jsonObject,
     );
     final epoch = _epoch;
     if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');

@@ -155,20 +155,17 @@ void main() {
     expect(() => inferenceBody('model', ' '), throwsA(isA<SiwcFailure>()));
   });
 
-  test('recipe format instructions and JSON mode are explicit and bounded', () {
+  test('recipe format instructions are explicit and bounded', () {
     final body = inferenceBody(
       'detected-model',
       '{"wish":"egg"}',
       instructions: 'Return Recipe JSON only.',
-      jsonObject: true,
     );
     expect(body['instructions'], 'Return Recipe JSON only.');
     expect(body['input'], [
       {'role': 'user', 'content': '{"wish":"egg"}'},
     ]);
-    expect(body['text'], {
-      'format': {'type': 'json_object'},
-    });
+    expect(body.containsKey('text'), isFalse);
     expect(body['store'], isFalse);
     expect(body['stream'], isTrue);
     expect(body.containsKey('max_output_tokens'), isFalse);
