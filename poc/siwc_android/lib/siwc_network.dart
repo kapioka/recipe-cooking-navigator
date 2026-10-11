@@ -15,6 +15,15 @@ String safeSocketFailure(SocketException error) {
       : '$description（通信診断: OS $code）';
 }
 
+String safeNetworkFailure(Object error) => switch (error) {
+  SocketException() => safeSocketFailure(error),
+  HandshakeException() => '安全な通信を確立できません。（通信診断: TLS）',
+  TimeoutException() => '通信が時間切れになりました。（通信診断: Timeout）',
+  HttpException() => 'HTTP通信の応答を受け取れませんでした。（通信診断: HTTP）',
+  FormatException() => '回答の形式を確認できません。（通信診断: Format）',
+  _ => '処理を完了できません。秘密情報を表示せず停止しました。',
+};
+
 abstract class SiwcNetwork {
   Future<Map<String, dynamic>> getJson(Uri uri, {String? bearer});
   Future<Map<String, dynamic>> postForm(
@@ -27,8 +36,10 @@ abstract class SiwcNetwork {
 }
 
 class HttpSiwcNetwork implements SiwcNetwork {
-  HttpClient _client = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 20);
+  HttpSiwcNetwork({HttpClient? client}) : _client = client ?? HttpClient() {
+    _client.connectionTimeout = const Duration(seconds: 20);
+  }
+  HttpClient _client;
 
   Future<HttpClientRequest> _open(String method, Uri uri) async {
     if (uri.scheme != 'https' ||
@@ -101,12 +112,26 @@ class HttpSiwcNetwork implements SiwcNetwork {
     request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearer');
     request.headers.contentType = ContentType.json;
     request.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
-    request.write(jsonEncode(body));
+    final payload = utf8.encode(jsonEncode(body));
+    request.contentLength = payload.length;
+    request.add(payload);
     final response = await request.close().timeout(const Duration(seconds: 30));
-    if (response.statusCode != 200 ||
-        response.headers.contentType?.mimeType != 'text/event-stream') {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       await _json(response);
-      throw const SiwcFailure('SSE応答ではありません。');
+    }
+    final mime = response.headers.contentType?.mimeType.toLowerCase();
+    // Some successful responses omit Content-Type. They still must pass the
+    // bounded SSE parser and a validated response.completed; never infer JSON.
+    if (mime != null && mime != 'text/event-stream') {
+      final kind = switch (mime) {
+        'application/json' => 'JSON',
+        'text/html' => 'HTML',
+        _ => 'その他',
+      };
+      cancel();
+      throw SiwcFailure(
+        'ストリーム回答ではありません。（HTTP ${response.statusCode} / 応答: $kind）',
+      );
     }
     try {
       return await collectCompletedResponse(

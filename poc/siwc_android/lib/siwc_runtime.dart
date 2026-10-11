@@ -429,15 +429,23 @@ class SiwcRuntime {
     final body = inferenceBody(model, confirmedText);
     final epoch = _epoch;
     if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');
-    await refresh();
-    _check(epoch);
-    if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');
-    final result = await network.infer(
-      _active!['access_token'] as String,
-      body,
-    );
-    _check(epoch);
-    return result;
+    var stage = '接続情報の更新';
+    try {
+      await refresh();
+      _check(epoch);
+      if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');
+      stage = 'AIへの送信・回答の受信';
+      final result = await network.infer(
+        _active!['access_token'] as String,
+        body,
+      );
+      _check(epoch);
+      return result;
+    } on SiwcFailure catch (error) {
+      throw SiwcFailure('$stage: ${error.message}');
+    } catch (error) {
+      throw SiwcFailure('$stage: ${safeNetworkFailure(error)}');
+    }
   }
 
   Future<bool> disconnect() async {

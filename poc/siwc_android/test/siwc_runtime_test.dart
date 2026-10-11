@@ -66,6 +66,7 @@ class FakeNetwork implements SiwcNetwork {
   bool grant = true;
   SocketException? discoveryFailure;
   SocketException? exchangeFailure;
+  Object? inferFailure;
   String subject = 'account';
   Completer<void>? refreshHold;
   Map<String, dynamic>? sent;
@@ -150,6 +151,7 @@ class FakeNetwork implements SiwcNetwork {
   @override
   Future<String> infer(String bearer, Map<String, dynamic> body) async {
     inferences++;
+    if (inferFailure != null) throw inferFailure!;
     sent = body;
     return 'completed';
   }
@@ -159,6 +161,44 @@ class FakeNetwork implements SiwcNetwork {
 }
 
 void main() {
+  test(
+    'inference errors distinguish transport failures without exposing secrets',
+    () async {
+      final platform = FakePlatform();
+      final network = FakeNetwork(platform);
+      final runtime = SiwcRuntime(platform, network);
+      await runtime.initialize();
+      await runtime.signIn();
+      for (final entry in <Object, String>{
+        const SocketException(
+          'secret-token',
+          osError: OSError('secret-url', 7),
+        ): 'OS 7',
+        const HandshakeException('secret-certificate'): 'TLS',
+        TimeoutException('secret-request'): 'Timeout',
+        const HttpException('secret-url'): 'HTTP',
+        const FormatException('secret-body'): 'Format',
+      }.entries) {
+        network.inferFailure = entry.key;
+        await expectLater(
+          runtime.infer('detected', 'confirmed'),
+          throwsA(
+            isA<SiwcFailure>().having(
+              (error) => error.message,
+              'safe inference diagnosis',
+              allOf(
+                contains('AIへの送信・回答の受信'),
+                contains(entry.value),
+                isNot(contains('secret')),
+              ),
+            ),
+          ),
+        );
+        expect(runtime.connected, true);
+      }
+    },
+  );
+
   test(
     'callback waits for foreground before exchange and honors cancellation',
     () async {

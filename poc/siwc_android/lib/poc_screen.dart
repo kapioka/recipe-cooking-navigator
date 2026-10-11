@@ -23,7 +23,6 @@ class _PocScreenState extends State<PocScreen> {
   final _text = TextEditingController(
     text: 'Reply with exactly: Hello, world!',
   );
-  final _focus = FocusNode();
   bool _busy = false;
   bool _ready = false;
   String _message = '安全保管を準備中…';
@@ -48,7 +47,6 @@ class _PocScreenState extends State<PocScreen> {
   void dispose() {
     widget.runtime.cancel();
     _text.dispose();
-    _focus.dispose();
     super.dispose();
   }
 
@@ -93,7 +91,7 @@ class _PocScreenState extends State<PocScreen> {
       _message = '音声入力はキャンセルまたは空でした。送信していません。';
     } else {
       _text.text = recognized.trim();
-      _message = '認識文を確認してください。「修正」で編集し、「確定して送信」で初めてAIへ送ります。';
+      _message = '認識文を確認してください。枠内で編集し、「確定して送信」で初めてAIへ送ります。';
     }
   });
   Future<void> _send() => _run(() async {
@@ -234,7 +232,6 @@ class _PocScreenState extends State<PocScreen> {
               TextField(
                 key: const Key('confirmed_text'),
                 controller: _text,
-                focusNode: _focus,
                 enabled: !_busy,
                 minLines: 3,
                 maxLines: 8,
@@ -248,31 +245,16 @@ class _PocScreenState extends State<PocScreen> {
                   _message = '入力は未送信です。内容を確認して確定してください。';
                 }),
               ),
-              const Text(
-                '音声認識はAndroidのサービスを使います。サービス・端末によってはネット通信があります。音声生データはこのOpenAI連携へ送信しません。',
-              ),
-              OutlinedButton(
-                key: const Key('dictate'),
-                onPressed: _busy || !_ready ? null : _dictate,
-                child: const Text('音声で文字入力'),
-              ),
               Row(
                 children: [
                   Expanded(
-                    child: TextButton(
-                      key: const Key('edit'),
-                      onPressed: _busy
-                          ? null
-                          : () {
-                              _focus.requestFocus();
-                              setState(() {
-                                _response = null;
-                                _message = '修正中です。確定するまで送信しません。';
-                              });
-                            },
-                      child: const Text('修正'),
+                    child: OutlinedButton(
+                      key: const Key('dictate'),
+                      onPressed: _busy || !_ready ? null : _dictate,
+                      child: const Text('音声で入力'),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton(
                       key: const Key('confirm_send'),
@@ -287,6 +269,12 @@ class _PocScreenState extends State<PocScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              const Text('枠内をタップして修正できます。「確定して送信」を押すまでAIへ送りません。'),
+              const SizedBox(height: 8),
+              const Text(
+                '音声認識はAndroidのサービスを使います。サービス・端末によってはネット通信があります。音声生データはこのOpenAI連携へ送信しません。',
               ),
               if (_busy)
                 TextButton(
