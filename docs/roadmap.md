@@ -4,7 +4,7 @@
 
 ## Current-state contract
 
-- Implementation baseline: `cf4f4b89942a500ab7d5fc7841163b37fe974f1d`
+- Implementation baseline: `8eab5ba8bea7ed8e89090f335ba8bdf516f69aa8`（本体連携のfeature branch。mainは`35c67c1b46fdaf8be841b92d0cb35507a672f8db`、PR #13はDraft）
 - Reconciled: 2026-10-11
 - 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
 - このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
@@ -24,7 +24,7 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映対象にはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoC、公開SIWCを使った本体のレシピ生成・Revision改善が含まれる。
 
-本体200テスト、PoC21テストと静的解析・debug buildが合格。本体の正式署名APKとPoCをPixelへ更新し、本体起動を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWCはforeground復帰待ち・nativeビルド経路・ストリーム受信を修正し、実機でOAuth・モデル一覧・完了回答の受信をユーザーが確認。正本Schema/Workflowを本文に添付する本体生成/Revision改善も実装し、共通Validator・材料/工程プレビュー・確認保存へ合流した。普通の会話文は保存せず、改善元ID/parent/next_revisionを照合し、activeと過去Versionを保持する。本体の正式署名APK更新済み。本体OAuth→生成→確認保存と改善の実機QAは次の未達Outcome。入力欄直下は音声入力と確定送信の2ボタンで、枠内編集の説明を配置した。外部SNS/バックエンド/iOSは今回追加しない。
+本体201テスト、共有adapterのPoC23テストと両静的解析、formatter、正式署名buildが合格。本体の署名APKをPixelへデータを保持して更新し、起動・致命的例外なし・回転設定0/0を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWC PoCではOAuth・モデル一覧・完了回答の受信をユーザーが確認。本体生成/Revision改善は正本Schema/Workflowと共通Validator・材料/工程プレビュー・確認保存へ合流し、改善元ID/parent/next_revision、activeと過去Versionを保持する。本体生成QAはRecipe読込エラー、その後の出力形式指定版はHTTP 400で失敗。形式指示をinstructions、希望・選択Feedbackをinputへ分離し、追加のtext.format指定は除去した。本文を表示しない形式/HTTP診断を追加した修正版を更新済み。Recipe生成→プレビュー→確認保存の実機QA成功までPR #13をDraftで保持し、main mergeを保留する。入力欄直下は音声入力と確定送信の2ボタンで、枠内編集の説明を配置した。
 
 ## Execution notes
 
@@ -51,7 +51,7 @@ Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映�
   - Android標準共有または依頼文コピー＋公開ChatGPT URLの起動を使う。事前入力や自動投稿は保証しない。
   - ローカルのRecipe / Feedback v2と公開mainのv1参照に差があるため、AI入口公開前に対応アプリ・公開Schema・生成Workflowの版をそろえる。公開されていないSchemaへ案内しない。
 
-- [ ] [#8 Sign in with ChatGPTでアプリ内生成・再作成](https://github.com/kapioka/recipe-cooking-navigator/issues/8) — 2026-10-11公式仕様調査、独立Flutter/Android PoCの認証・テキスト推論・音声修正/確定導線を実装。本体200/PoC21テスト合格。実機PoCの認証・モデル・完了回答を確認し、本体の生成/改善・形式検証・プレビュー保存も実装。署名APKをPixelへ更新。本体での認証・生成・改善の実機QAは未完了。[調査と後日のQA](plans/issue8-siwc-research-and-qa.md)。
+- [ ] [#8 Sign in with ChatGPTでアプリ内生成・再作成](https://github.com/kapioka/recipe-cooking-navigator/issues/8) — 2026-10-11公式仕様調査、独立Flutter/Android PoCの認証・テキスト推論・音声修正/確定導線を実装。本体201/PoC23テスト合格。実機PoCの認証・モデル・完了回答を確認。本体の生成/改善・形式検証・プレビュー保存を実装し署名APKをPixelへ更新。本体生成QAは形式エラー/HTTP 400の修正後、再確認待ち。PR #13はDraft、main mergeを保留。[調査と後日のQA](plans/issue8-siwc-research-and-qa.md)。
 
 ちかベルの[#16](https://github.com/kapioka/chikabell/issues/16)と共通の操作方式で進める。共通化するのは「条件入力 → AI入口URL付き依頼 → ChatGPTで検索／生成 → 戻して検証・確認・保存」という体験であり、地点とRecipeのデータ形式は各アプリの正本に従う。
 
