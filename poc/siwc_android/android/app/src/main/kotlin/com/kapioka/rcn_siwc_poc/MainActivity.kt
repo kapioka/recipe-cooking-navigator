@@ -20,6 +20,8 @@ import javax.crypto.spec.GCMParameterSpec
 
 class MainActivity : FlutterActivity() {
     private var pendingSpeech: MethodChannel.Result? = null
+    private var pendingForeground: MethodChannel.Result? = null
+    private var resumed = false
     private val credentialFile by lazy { AtomicFile(File(filesDir, "siwc.encrypted")) }
 
     private fun key(): SecretKey {
@@ -68,6 +70,11 @@ class MainActivity : FlutterActivity() {
                         startActivity(Intent(Intent.ACTION_VIEW, uri))
                         result.success(null)
                     }
+                    "waitForForeground" -> {
+                        check(pendingForeground == null)
+                        if (resumed) result.success(null)
+                        else pendingForeground = result
+                    }
                     "dictate" -> {
                         check(pendingSpeech == null)
                         pendingSpeech = result
@@ -102,7 +109,20 @@ class MainActivity : FlutterActivity() {
             result?.success(text)
         }
     }
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        val result = pendingForeground
+        pendingForeground = null
+        result?.success(null)
+    }
+    override fun onPause() {
+        resumed = false
+        super.onPause()
+    }
     override fun onDestroy() {
+        pendingForeground?.error("activity_destroyed", "アプリへの復帰待ちを終了しました。再接続してください。", null)
+        pendingForeground = null
         pendingSpeech?.success(null)
         pendingSpeech = null
         super.onDestroy()

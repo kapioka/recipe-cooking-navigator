@@ -11,6 +11,7 @@ abstract class PocPlatform {
   Future<String?> readSecure();
   Future<void> writeSecure(String document);
   Future<void> openBrowser(String uri);
+  Future<void> waitForForeground();
   Future<String?> dictate();
 }
 
@@ -24,6 +25,9 @@ class AndroidPocPlatform implements PocPlatform {
   @override
   Future<void> openBrowser(String uri) =>
       _channel.invokeMethod<void>('openBrowser', uri);
+  @override
+  Future<void> waitForForeground() =>
+      _channel.invokeMethod<void>('waitForForeground');
   @override
   Future<String?> dictate() => _channel.invokeMethod<String>('dictate');
 }
@@ -232,6 +236,11 @@ class SiwcRuntime {
         _document['pending_client_id'] = validated.clientId;
         await _save(); // Keep registration through invalid_grant, without making it active.
       }
+      _check(epoch);
+      // The loopback callback arrives while Chrome is foreground. Resume the
+      // Android app before starting authenticated network work.
+      stage = 'アプリへの復帰待ち';
+      await platform.waitForForeground().timeout(const Duration(minutes: 3));
       _check(epoch);
       stage = '認証コードの交換';
       final tokens = await network.postForm(

@@ -14,6 +14,14 @@ class FakePlatform implements PocPlatform {
   Uri? auth;
   String? callbackPage;
   String? callbackType;
+  Completer<void>? foregroundHold;
+  Completer<void>? foregroundReached;
+  @override
+  Future<void> waitForForeground() async {
+    foregroundReached?.complete();
+    await foregroundHold?.future;
+  }
+
   @override
   Future<String?> readSecure() async => saved;
   @override
@@ -52,6 +60,7 @@ class FakeNetwork implements SiwcNetwork {
   int refreshes = 0;
   int inferences = 0;
   int modelRequests = 0;
+  int exchanges = 0;
   String? refreshScope;
   bool revokeFailure = false;
   bool grant = true;
@@ -112,6 +121,7 @@ class FakeNetwork implements SiwcNetwork {
         if (refreshScope != null) 'scope': refreshScope,
       };
     }
+    exchanges++;
     expect(fields['client_id'], 'issued');
     if (exchangeFailure != null) throw exchangeFailure!;
     expect(
@@ -149,6 +159,32 @@ class FakeNetwork implements SiwcNetwork {
 }
 
 void main() {
+  test(
+    'callback waits for foreground before exchange and honors cancellation',
+    () async {
+      for (final cancel in [false, true]) {
+        final platform = FakePlatform()
+          ..foregroundHold = Completer<void>()
+          ..foregroundReached = Completer<void>();
+        final network = FakeNetwork(platform);
+        final runtime = SiwcRuntime(platform, network);
+        await runtime.initialize();
+        final signIn = runtime.signIn();
+        final result = cancel
+            ? expectLater(signIn, throwsA(isA<SiwcFailure>()))
+            : signIn;
+        await platform.foregroundReached!.future;
+        expect(network.exchanges, 0);
+        expect(runtime.connected, false);
+        if (cancel) runtime.cancel();
+        platform.foregroundHold!.complete();
+        await result;
+        expect(network.exchanges, cancel ? 0 : 1);
+        expect(runtime.canInfer, !cancel);
+      }
+    },
+  );
+
   test(
     'native connection failure prevents browser auth and permits safe retry',
     () async {
