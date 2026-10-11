@@ -11,6 +11,10 @@ abstract interface class RecipeDocumentStore {
   Future<StoreRecipeResult> saveDocument(Map<String, dynamic> document);
 }
 
+abstract interface class RecipeDocumentDeletionStore {
+  Future<void> deleteRecipe(String recipeId);
+}
+
 class RecipeStorageException implements Exception {
   const RecipeStorageException(this.message, [this.cause]);
 
@@ -21,10 +25,11 @@ class RecipeStorageException implements Exception {
   String toString() => message;
 }
 
-class FileRecipeDocumentStore implements RecipeDocumentStore {
+class FileRecipeDocumentStore
+    implements RecipeDocumentStore, RecipeDocumentDeletionStore {
   FileRecipeDocumentStore(this.file);
 
-  static const storageVersion = 1;
+  static const storageVersion = 2;
 
   final File file;
 
@@ -83,6 +88,17 @@ class FileRecipeDocumentStore implements RecipeDocumentStore {
     return StoreRecipeResult.added;
   }
 
+  @override
+  Future<void> deleteRecipe(String recipeId) async {
+    final documents = await loadDocuments();
+    final remaining = documents.where((document) {
+      final recipe = document['recipe'];
+      return recipe is! Map<String, dynamic> || recipe['id'] != recipeId;
+    }).toList();
+    if (remaining.length == documents.length) return;
+    await _writeDocuments(remaining);
+  }
+
   Future<File?> _readableSource() async {
     if (await file.exists()) {
       return file;
@@ -120,8 +136,12 @@ class FileRecipeDocumentStore implements RecipeDocumentStore {
         rethrow;
       }
 
-      if (await _backupFile.exists()) {
-        await _backupFile.delete();
+      try {
+        if (await _backupFile.exists()) {
+          await _backupFile.delete();
+        }
+      } on FileSystemException {
+        // The primary file is committed; do not report a false write failure.
       }
     } catch (error) {
       throw RecipeStorageException('レシピを端末へ保存できませんでした。', error);

@@ -14,7 +14,8 @@ $resolvedApkPath = (Resolve-Path -LiteralPath $ApkPath).Path
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $apkToolPath = $resolvedApkPath
 $repoPrefix = $repoRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-if ($resolvedApkPath.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+if ($resolvedApkPath.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase) -and
+    $resolvedApkPath -match '[^\x00-\x7F]') {
     $workspaceParent = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'FlutterWorkspaces'
     $workspaceLink = Join-Path $workspaceParent 'recipe-cooking-navigator'
     if (-not (Test-Path -LiteralPath $workspaceLink)) {

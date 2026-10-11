@@ -1,0 +1,772 @@
+[
+  {
+    "evidence_schema_version": "1.0.0",
+    "type": "feedback_evidence",
+    "feedback_id": "feedback-example-001",
+    "created_at": "2026-10-04T00:00:00Z",
+    "categories": [
+      "主菜"
+    ],
+    "confirmed_intents": {
+      "saltiness": -1
+    },
+    "feedback": {
+      "schema_version": "2.0.0",
+      "type": "recipe_feedback",
+      "recipe_snapshot": {
+        "schema_version": "2.0.0",
+        "type": "recipe",
+        "recipe": {
+          "id": "recipe-example-001",
+          "revision": 1,
+          "parent_revision": null,
+          "title": "豚肉炒め",
+          "servings": 2,
+          "serving_adjustment": {
+            "min_servings": 1,
+            "max_servings": 4,
+            "note": "4人分では肉を分けて焼く。"
+          },
+          "total_time_minutes": 10,
+          "estimated_difficulty": {
+            "score": 1,
+            "reason": "工程が少ない"
+          },
+          "ingredients": [
+            {
+              "id": "pork",
+              "name": "豚肉"
+            }
+          ],
+          "amounts": [
+            {
+              "id": "pork-all",
+              "ingredient_id": "pork",
+              "label": "全量",
+              "quantity": {
+                "kind": "measured",
+                "value": {
+                  "numerator": 100,
+                  "denominator": 1
+                },
+                "unit": "g",
+                "scaling": "linear"
+              }
+            }
+          ],
+          "overview": [
+            [
+              {
+                "type": "text",
+                "text": "豚肉を炒める"
+              }
+            ]
+          ],
+          "utensils": [
+            {
+              "id": "pan",
+              "name": "フライパン",
+              "quantity": 1
+            }
+          ],
+          "preparation": [],
+          "stages": [
+            {
+              "id": "main",
+              "title": "加熱",
+              "steps": [
+                {
+                  "id": "cook",
+                  "title": "炒める",
+                  "instruction": [
+                    {
+                      "type": "amount_ref",
+                      "amount_id": "pork-all"
+                    },
+                    {
+                      "type": "text",
+                      "text": "を炒める。"
+                    }
+                  ],
+                  "amount_ids": [
+                    "pork-all"
+                  ],
+                  "done_when": [
+                    {
+                      "type": "text",
+                      "text": "赤い部分がなくなる"
+                    }
+                  ],
+                  "utensil_ids": [
+                    "pan"
+                  ],
+                  "parallel_tasks": []
+                }
+              ]
+            }
+          ],
+          "adjustments": [],
+          "revision_summary": []
+        }
+      },
+      "cook_session": {
+        "id": "session-example-001",
+        "recipe_id": "recipe-example-001",
+        "recipe_revision": 1,
+        "recipe_snapshot": {
+          "schema_version": "2.0.0",
+          "type": "recipe",
+          "recipe": {
+            "id": "recipe-example-001",
+            "revision": 1,
+            "parent_revision": null,
+            "title": "豚肉炒め",
+            "servings": 2,
+            "serving_adjustment": {
+              "min_servings": 1,
+              "max_servings": 4,
+              "note": "4人分では肉を分けて焼く。"
+            },
+            "total_time_minutes": 10,
+            "estimated_difficulty": {
+              "score": 1,
+              "reason": "工程が少ない"
+            },
+            "ingredients": [
+              {
+                "id": "pork",
+                "name": "豚肉"
+              }
+            ],
+            "amounts": [
+              {
+                "id": "pork-all",
+                "ingredient_id": "pork",
+                "label": "全量",
+                "quantity": {
+                  "kind": "measured",
+                  "value": {
+                    "numerator": 100,
+                    "denominator": 1
+                  },
+                  "unit": "g",
+                  "scaling": "linear"
+                }
+              }
+            ],
+            "overview": [
+              [
+                {
+                  "type": "text",
+                  "text": "豚肉を炒める"
+                }
+              ]
+            ],
+            "utensils": [
+              {
+                "id": "pan",
+                "name": "フライパン",
+                "quantity": 1
+              }
+            ],
+            "preparation": [],
+            "stages": [
+              {
+                "id": "main",
+                "title": "加熱",
+                "steps": [
+                  {
+                    "id": "cook",
+                    "title": "炒める",
+                    "instruction": [
+                      {
+                        "type": "amount_ref",
+                        "amount_id": "pork-all"
+                      },
+                      {
+                        "type": "text",
+                        "text": "を炒める。"
+                      }
+                    ],
+                    "amount_ids": [
+                      "pork-all"
+                    ],
+                    "done_when": [
+                      {
+                        "type": "text",
+                        "text": "赤い部分がなくなる"
+                      }
+                    ],
+                    "utensil_ids": [
+                      "pan"
+                    ],
+                    "parallel_tasks": []
+                  }
+                ]
+              }
+            ],
+            "adjustments": [],
+            "revision_summary": []
+          }
+        },
+        "cooking_context": {
+          "target_servings": 4,
+          "scaling_algorithm": "servings-v2.0",
+          "resolved_amounts": [
+            {
+              "amount_id": "pork-all",
+              "quantity": {
+                "kind": "measured",
+                "value": {
+                  "numerator": "200",
+                  "denominator": "1"
+                },
+                "unit": "g"
+              }
+            }
+          ]
+        },
+        "cooked_at": "2026-09-19T19:10:00+09:00",
+        "actual_time_minutes": 12,
+        "difficulty": {
+          "score": 2,
+          "comment": "肉を分けて焼いた"
+        },
+        "issues": [],
+        "changes_made": []
+      },
+      "evaluation": {
+        "overall": 4,
+        "taste": [
+          {
+            "deviation": 1,
+            "comment": "少し塩味が強い",
+            "dimension": "saltiness"
+          }
+        ],
+        "comment": "カテゴリに限定して評価する例",
+        "next_time_intent": [
+          "次回は塩味を控える"
+        ]
+      },
+      "revision_request": {
+        "preserve_successful_parts": true,
+        "goal": "今回の評価を反映して次回用のRevision 2を作る",
+        "next_revision": 2,
+        "notes": "食品安全と調理の簡単さは維持する"
+      }
+    }
+  },
+  {
+    "evidence_schema_version": "1.0.0",
+    "type": "feedback_evidence",
+    "feedback_id": "feedback-example-002",
+    "created_at": "2026-10-04T00:00:00Z",
+    "categories": [
+      "主菜"
+    ],
+    "confirmed_intents": {},
+    "feedback": {
+      "schema_version": "2.0.0",
+      "type": "recipe_feedback",
+      "recipe_snapshot": {
+        "schema_version": "2.0.0",
+        "type": "recipe",
+        "recipe": {
+          "id": "recipe-example-002",
+          "revision": 1,
+          "parent_revision": null,
+          "title": "豚肉炒め",
+          "servings": 2,
+          "serving_adjustment": {
+            "min_servings": 1,
+            "max_servings": 4,
+            "note": "4人分では肉を分けて焼く。"
+          },
+          "total_time_minutes": 10,
+          "estimated_difficulty": {
+            "score": 1,
+            "reason": "工程が少ない"
+          },
+          "ingredients": [
+            {
+              "id": "pork",
+              "name": "豚肉"
+            }
+          ],
+          "amounts": [
+            {
+              "id": "pork-all",
+              "ingredient_id": "pork",
+              "label": "全量",
+              "quantity": {
+                "kind": "measured",
+                "value": {
+                  "numerator": 100,
+                  "denominator": 1
+                },
+                "unit": "g",
+                "scaling": "linear"
+              }
+            }
+          ],
+          "overview": [
+            [
+              {
+                "type": "text",
+                "text": "豚肉を炒める"
+              }
+            ]
+          ],
+          "utensils": [
+            {
+              "id": "pan",
+              "name": "フライパン",
+              "quantity": 1
+            }
+          ],
+          "preparation": [],
+          "stages": [
+            {
+              "id": "main",
+              "title": "加熱",
+              "steps": [
+                {
+                  "id": "cook",
+                  "title": "炒める",
+                  "instruction": [
+                    {
+                      "type": "amount_ref",
+                      "amount_id": "pork-all"
+                    },
+                    {
+                      "type": "text",
+                      "text": "を炒める。"
+                    }
+                  ],
+                  "amount_ids": [
+                    "pork-all"
+                  ],
+                  "done_when": [
+                    {
+                      "type": "text",
+                      "text": "赤い部分がなくなる"
+                    }
+                  ],
+                  "utensil_ids": [
+                    "pan"
+                  ],
+                  "parallel_tasks": []
+                }
+              ]
+            }
+          ],
+          "adjustments": [],
+          "revision_summary": []
+        }
+      },
+      "cook_session": {
+        "id": "session-example-002",
+        "recipe_id": "recipe-example-002",
+        "recipe_revision": 1,
+        "recipe_snapshot": {
+          "schema_version": "2.0.0",
+          "type": "recipe",
+          "recipe": {
+            "id": "recipe-example-002",
+            "revision": 1,
+            "parent_revision": null,
+            "title": "豚肉炒め",
+            "servings": 2,
+            "serving_adjustment": {
+              "min_servings": 1,
+              "max_servings": 4,
+              "note": "4人分では肉を分けて焼く。"
+            },
+            "total_time_minutes": 10,
+            "estimated_difficulty": {
+              "score": 1,
+              "reason": "工程が少ない"
+            },
+            "ingredients": [
+              {
+                "id": "pork",
+                "name": "豚肉"
+              }
+            ],
+            "amounts": [
+              {
+                "id": "pork-all",
+                "ingredient_id": "pork",
+                "label": "全量",
+                "quantity": {
+                  "kind": "measured",
+                  "value": {
+                    "numerator": 100,
+                    "denominator": 1
+                  },
+                  "unit": "g",
+                  "scaling": "linear"
+                }
+              }
+            ],
+            "overview": [
+              [
+                {
+                  "type": "text",
+                  "text": "豚肉を炒める"
+                }
+              ]
+            ],
+            "utensils": [
+              {
+                "id": "pan",
+                "name": "フライパン",
+                "quantity": 1
+              }
+            ],
+            "preparation": [],
+            "stages": [
+              {
+                "id": "main",
+                "title": "加熱",
+                "steps": [
+                  {
+                    "id": "cook",
+                    "title": "炒める",
+                    "instruction": [
+                      {
+                        "type": "amount_ref",
+                        "amount_id": "pork-all"
+                      },
+                      {
+                        "type": "text",
+                        "text": "を炒める。"
+                      }
+                    ],
+                    "amount_ids": [
+                      "pork-all"
+                    ],
+                    "done_when": [
+                      {
+                        "type": "text",
+                        "text": "赤い部分がなくなる"
+                      }
+                    ],
+                    "utensil_ids": [
+                      "pan"
+                    ],
+                    "parallel_tasks": []
+                  }
+                ]
+              }
+            ],
+            "adjustments": [],
+            "revision_summary": []
+          }
+        },
+        "cooking_context": {
+          "target_servings": 4,
+          "scaling_algorithm": "servings-v2.0",
+          "resolved_amounts": [
+            {
+              "amount_id": "pork-all",
+              "quantity": {
+                "kind": "measured",
+                "value": {
+                  "numerator": "200",
+                  "denominator": "1"
+                },
+                "unit": "g"
+              }
+            }
+          ]
+        },
+        "cooked_at": "2026-09-19T19:10:00+09:00",
+        "actual_time_minutes": 12,
+        "difficulty": {
+          "score": 2,
+          "comment": "肉を分けて焼いた"
+        },
+        "issues": [],
+        "changes_made": []
+      },
+      "evaluation": {
+        "overall": 4,
+        "taste": [
+          {
+            "deviation": 1,
+            "comment": "少し塩味が強い",
+            "dimension": "saltiness"
+          }
+        ],
+        "comment": "カテゴリに限定して評価する例",
+        "next_time_intent": [
+          "次回は塩味を控える"
+        ]
+      },
+      "revision_request": {
+        "preserve_successful_parts": true,
+        "goal": "今回の評価を反映して次回用のRevision 2を作る",
+        "next_revision": 2,
+        "notes": "食品安全と調理の簡単さは維持する"
+      }
+    }
+  },
+  {
+    "evidence_schema_version": "1.0.0",
+    "type": "feedback_evidence",
+    "feedback_id": "feedback-example-003",
+    "created_at": "2026-10-04T00:00:00Z",
+    "categories": [
+      "主菜"
+    ],
+    "confirmed_intents": {},
+    "feedback": {
+      "schema_version": "2.0.0",
+      "type": "recipe_feedback",
+      "recipe_snapshot": {
+        "schema_version": "2.0.0",
+        "type": "recipe",
+        "recipe": {
+          "id": "recipe-example-001",
+          "revision": 1,
+          "parent_revision": null,
+          "title": "豚肉炒め",
+          "servings": 2,
+          "serving_adjustment": {
+            "min_servings": 1,
+            "max_servings": 4,
+            "note": "4人分では肉を分けて焼く。"
+          },
+          "total_time_minutes": 10,
+          "estimated_difficulty": {
+            "score": 1,
+            "reason": "工程が少ない"
+          },
+          "ingredients": [
+            {
+              "id": "pork",
+              "name": "豚肉"
+            }
+          ],
+          "amounts": [
+            {
+              "id": "pork-all",
+              "ingredient_id": "pork",
+              "label": "全量",
+              "quantity": {
+                "kind": "measured",
+                "value": {
+                  "numerator": 100,
+                  "denominator": 1
+                },
+                "unit": "g",
+                "scaling": "linear"
+              }
+            }
+          ],
+          "overview": [
+            [
+              {
+                "type": "text",
+                "text": "豚肉を炒める"
+              }
+            ]
+          ],
+          "utensils": [
+            {
+              "id": "pan",
+              "name": "フライパン",
+              "quantity": 1
+            }
+          ],
+          "preparation": [],
+          "stages": [
+            {
+              "id": "main",
+              "title": "加熱",
+              "steps": [
+                {
+                  "id": "cook",
+                  "title": "炒める",
+                  "instruction": [
+                    {
+                      "type": "amount_ref",
+                      "amount_id": "pork-all"
+                    },
+                    {
+                      "type": "text",
+                      "text": "を炒める。"
+                    }
+                  ],
+                  "amount_ids": [
+                    "pork-all"
+                  ],
+                  "done_when": [
+                    {
+                      "type": "text",
+                      "text": "赤い部分がなくなる"
+                    }
+                  ],
+                  "utensil_ids": [
+                    "pan"
+                  ],
+                  "parallel_tasks": []
+                }
+              ]
+            }
+          ],
+          "adjustments": [],
+          "revision_summary": []
+        }
+      },
+      "cook_session": {
+        "id": "session-example-003",
+        "recipe_id": "recipe-example-001",
+        "recipe_revision": 1,
+        "recipe_snapshot": {
+          "schema_version": "2.0.0",
+          "type": "recipe",
+          "recipe": {
+            "id": "recipe-example-001",
+            "revision": 1,
+            "parent_revision": null,
+            "title": "豚肉炒め",
+            "servings": 2,
+            "serving_adjustment": {
+              "min_servings": 1,
+              "max_servings": 4,
+              "note": "4人分では肉を分けて焼く。"
+            },
+            "total_time_minutes": 10,
+            "estimated_difficulty": {
+              "score": 1,
+              "reason": "工程が少ない"
+            },
+            "ingredients": [
+              {
+                "id": "pork",
+                "name": "豚肉"
+              }
+            ],
+            "amounts": [
+              {
+                "id": "pork-all",
+                "ingredient_id": "pork",
+                "label": "全量",
+                "quantity": {
+                  "kind": "measured",
+                  "value": {
+                    "numerator": 100,
+                    "denominator": 1
+                  },
+                  "unit": "g",
+                  "scaling": "linear"
+                }
+              }
+            ],
+            "overview": [
+              [
+                {
+                  "type": "text",
+                  "text": "豚肉を炒める"
+                }
+              ]
+            ],
+            "utensils": [
+              {
+                "id": "pan",
+                "name": "フライパン",
+                "quantity": 1
+              }
+            ],
+            "preparation": [],
+            "stages": [
+              {
+                "id": "main",
+                "title": "加熱",
+                "steps": [
+                  {
+                    "id": "cook",
+                    "title": "炒める",
+                    "instruction": [
+                      {
+                        "type": "amount_ref",
+                        "amount_id": "pork-all"
+                      },
+                      {
+                        "type": "text",
+                        "text": "を炒める。"
+                      }
+                    ],
+                    "amount_ids": [
+                      "pork-all"
+                    ],
+                    "done_when": [
+                      {
+                        "type": "text",
+                        "text": "赤い部分がなくなる"
+                      }
+                    ],
+                    "utensil_ids": [
+                      "pan"
+                    ],
+                    "parallel_tasks": []
+                  }
+                ]
+              }
+            ],
+            "adjustments": [],
+            "revision_summary": []
+          }
+        },
+        "cooking_context": {
+          "target_servings": 4,
+          "scaling_algorithm": "servings-v2.0",
+          "resolved_amounts": [
+            {
+              "amount_id": "pork-all",
+              "quantity": {
+                "kind": "measured",
+                "value": {
+                  "numerator": "200",
+                  "denominator": "1"
+                },
+                "unit": "g"
+              }
+            }
+          ]
+        },
+        "cooked_at": "2026-09-19T19:10:00+09:00",
+        "actual_time_minutes": 12,
+        "difficulty": {
+          "score": 2,
+          "comment": "肉を分けて焼いた"
+        },
+        "issues": [],
+        "changes_made": []
+      },
+      "evaluation": {
+        "overall": 4,
+        "taste": [
+          {
+            "deviation": 1,
+            "comment": "少し塩味が強い",
+            "dimension": "saltiness"
+          }
+        ],
+        "comment": "カテゴリに限定して評価する例",
+        "next_time_intent": [
+          "次回は塩味を控える"
+        ]
+      },
+      "revision_request": {
+        "preserve_successful_parts": true,
+        "goal": "今回の評価を反映して次回用のRevision 2を作る",
+        "next_revision": 2,
+        "notes": "食品安全と調理の簡単さは維持する"
+      }
+    }
+  }
+]

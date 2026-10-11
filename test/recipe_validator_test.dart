@@ -9,7 +9,7 @@ void main() {
   late String validRecipeSource;
 
   setUpAll(() async {
-    final schema = await File('schemas/recipe-v1.schema.json').readAsString();
+    final schema = await File('schemas/recipe-v2.schema.json').readAsString();
     validRecipeSource = await File('examples/recipe-example.json')
         .readAsString();
     validator = RecipeValidator.fromSchemaString(schema);
@@ -55,7 +55,7 @@ void main() {
 
   test('rejects an unsupported schema version before saving', () {
     final document = jsonDecode(validRecipeSource) as Map<String, dynamic>;
-    document['schema_version'] = '2.0.0';
+    document['schema_version'] = '9.0.0';
 
     expect(
       () => validator.validateDocument(document),
@@ -68,6 +68,70 @@ void main() {
       ),
     );
   });
+
+  test('rejects v1 with a dedicated recreation message', () {
+    final document = jsonDecode(validRecipeSource) as Map<String, dynamic>;
+    document['schema_version'] = '1.0.0';
+
+    expect(
+      () => validator.validateDocument(document),
+      throwsA(
+        isA<RecipeImportException>()
+            .having(
+              (error) => error.code,
+              'code',
+              RecipeImportErrorCode.unsupportedSchemaVersion,
+            )
+            .having((error) => error.message, 'message', contains('旧形式')),
+      ),
+    );
+  });
+
+  test(
+    'rejects unknown units, unused amounts, and fixed amounts without reasons',
+    () {
+      final unknownUnit = jsonDecode(validRecipeSource) as Map<String, dynamic>;
+      final unknownRecipe = unknownUnit['recipe'] as Map<String, dynamic>;
+      final firstAmount = (unknownRecipe['amounts'] as List).first as Map;
+      firstAmount['quantity']['unit'] = 'cup';
+      expect(
+        () => validator.validateDocument(unknownUnit),
+        throwsA(isA<RecipeImportException>()),
+      );
+
+      final unused = jsonDecode(validRecipeSource) as Map<String, dynamic>;
+      final unusedRecipe = unused['recipe'] as Map<String, dynamic>;
+      (unusedRecipe['ingredients'] as List).add({
+        'id': 'unused',
+        'name': '未使用材料',
+      });
+      (unusedRecipe['amounts'] as List).add({
+        'id': 'unused-amount',
+        'ingredient_id': 'unused',
+        'label': '全量',
+        'quantity': {
+          'kind': 'measured',
+          'value': {'numerator': 1, 'denominator': 1},
+          'unit': 'g',
+          'scaling': 'linear',
+        },
+      });
+      expect(
+        () => validator.validateDocument(unused),
+        throwsA(isA<RecipeImportException>()),
+      );
+
+      final missingReason =
+          jsonDecode(validRecipeSource) as Map<String, dynamic>;
+      final missingRecipe = missingReason['recipe'] as Map<String, dynamic>;
+      final oil = (missingRecipe['amounts'] as List)[2] as Map;
+      (oil['quantity'] as Map).remove('adjustment_note');
+      expect(
+        () => validator.validateDocument(missingReason),
+        throwsA(isA<RecipeImportException>()),
+      );
+    },
+  );
 
   test('rejects fields not defined by the schema', () {
     final document = jsonDecode(validRecipeSource) as Map<String, dynamic>;

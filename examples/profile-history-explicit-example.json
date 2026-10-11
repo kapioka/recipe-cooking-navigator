@@ -1,0 +1,79 @@
+[
+  {
+    "history_schema_version": "1.0.0",
+    "type": "profile_history",
+    "record_id": "bootstrap-example",
+    "kind": "bootstrap",
+    "parent_id": null,
+    "base_profile": null,
+    "base_digest": null,
+    "result_profile": {
+      "profile_schema_version": "1.0.0",
+      "type": "cooking_profile",
+      "profile_id": "profile-history-example",
+      "revision": 1,
+      "updated_at": "2026-10-04T00:00:00.000Z",
+      "preferences": [],
+      "explicit_constraints": []
+    },
+    "result_digest": "ac3eed5e38f027bf178ec0c2e2c8111aee50857aa7d8517994202f3b3f1a3259",
+    "operation": null,
+    "evidence": [],
+    "parent_digest": null
+  },
+  {
+    "history_schema_version": "1.0.0",
+    "type": "profile_history",
+    "record_id": "explicit-example",
+    "kind": "update",
+    "parent_id": "bootstrap-example",
+    "base_profile": {
+      "profile_schema_version": "1.0.0",
+      "type": "cooking_profile",
+      "profile_id": "profile-history-example",
+      "revision": 1,
+      "updated_at": "2026-10-04T00:00:00.000Z",
+      "preferences": [],
+      "explicit_constraints": []
+    },
+    "base_digest": "ac3eed5e38f027bf178ec0c2e2c8111aee50857aa7d8517994202f3b3f1a3259",
+    "result_profile": {
+      "profile_schema_version": "1.1.0",
+      "type": "cooking_profile",
+      "profile_id": "profile-history-example",
+      "revision": 2,
+      "updated_at": "2026-10-04T01:00:00.000Z",
+      "preferences": [
+        {
+          "scope": {
+            "kind": "global",
+            "value": "*"
+          },
+          "dimension": "saltiness",
+          "direction": -1,
+          "source_kind": "explicit_user",
+          "declaration": "普段から塩味が控えめな料理を好む",
+          "confirmed_at": "2026-10-04T01:00:00.000Z"
+        }
+      ],
+      "explicit_constraints": []
+    },
+    "result_digest": "f88ce9bb09611700f585a917075f8d85476826cd132eba79bf1a8516792ba016",
+    "operation": {
+      "operation_schema_version": "1.0.0",
+      "operation_id": "explicit-example",
+      "kind": "explicit_preference",
+      "base_revision": 1,
+      "decided_at": "2026-10-04T01:00:00.000Z",
+      "scope": {
+        "kind": "global",
+        "value": "*"
+      },
+      "dimension": "saltiness",
+      "direction": -1,
+      "declaration": "普段から塩味が控えめな料理を好む"
+    },
+    "evidence": [],
+    "parent_digest": "28be7df355cf82d889aa9bb25344573eba63ac208878d21320bdf2983a3e9dd1"
+  }
+]

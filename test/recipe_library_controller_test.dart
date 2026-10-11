@@ -14,7 +14,7 @@ void main() {
 
   setUpAll(() async {
     validator = RecipeValidator.fromSchemaString(
-      await File('schemas/recipe-v1.schema.json').readAsString(),
+      await File('schemas/recipe-v2.schema.json').readAsString(),
     );
     revisionOne = jsonDecode(
       await File('examples/recipe-example.json').readAsString(),
@@ -187,6 +187,45 @@ void main() {
 
     expect(result.status, RecipeImportStatus.failed);
     expect(store.documents, isEmpty);
+  });
+
+  test('does not save a valid file until its preview is confirmed', () async {
+    final store = _MemoryRecipeDocumentStore();
+    final controller = RecipeLibraryController(
+      store,
+      _MemoryRecipeTagStore(),
+      validator,
+      () async => jsonEncode(revisionOne),
+    );
+
+    final preparation = await controller.prepareImportFromFile();
+
+    expect(preparation.status, RecipeImportPreparationStatus.ready);
+    expect(preparation.preview?.title, '豚の生姜焼き');
+    expect(controller.isImporting, isTrue);
+    expect(store.documents, isEmpty);
+
+    controller.cancelPreparedImport(preparation.preview!);
+    expect(controller.isImporting, isFalse);
+    expect(store.documents, isEmpty);
+  });
+
+  test('saves exactly the confirmed preview', () async {
+    final store = _MemoryRecipeDocumentStore();
+    final controller = RecipeLibraryController(
+      store,
+      _MemoryRecipeTagStore(),
+      validator,
+      () async => jsonEncode(revisionOne),
+    );
+
+    final preparation = await controller.prepareImportFromFile();
+    final result = await controller.confirmPreparedImport(preparation.preview!);
+
+    expect(result.status, RecipeImportStatus.imported);
+    expect(controller.isImporting, isFalse);
+    expect(store.documents, hasLength(1));
+    expect(controller.recipes.single.title, '豚の生姜焼き');
   });
 
   test('searches titles, ingredients, and tags by substring', () async {

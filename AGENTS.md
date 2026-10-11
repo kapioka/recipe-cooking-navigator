@@ -65,15 +65,25 @@ Schemaの構造・意味については`schemas/*.schema.json`を正本とする
 リポジトリ直下で使用する基本コマンド:
 
 - format確認: `dart format --output=none --set-exit-if-changed lib test`
-- static analysis / lint: `pwsh -File .\\tool\\flutterw.ps1 analyze`
-- unit / widget tests: `pwsh -File .\\tool\\flutterw.ps1 test`
-- Android debug build: `pwsh -File .\\tool\\flutterw.ps1 build apk --debug`
+- static analysis / lint: `pwsh -File .\tool\flutterw.ps1 analyze`
+- unit / widget tests: `pwsh -File .\tool\flutterw.ps1 test`
+- Android debug build: `pwsh -File .\tool\flutterw.ps1 build apk --debug`
+- Issue #8独立PoCの検証: `pwsh -NoProfile -File .\tool\siwc-poc.ps1 analyze --no-pub`、`test --no-pub`、`build apk --debug --no-pub`。本体とは別packageで、詳細は`docs/plans/issue8-siwc-research-and-qa.md`に従う。
+- Profile履歴のread-only検証: `dart run --verbosity=error tool/validate_profile_history.dart <Historyフォルダまたは全recordのJSON配列ファイル>`。成功時だけProfile JSONをstdoutへ出し、失敗時はexit 2。Driveの取得・更新は行わない。
 
 Windowsでは親パス`E:\\作ってみた`の非ASCII文字をAndroid Gradle Pluginが拒否するため、Flutterコマンドは`tool/flutterw.ps1`を介して実行する。wrapperは実行中だけ同じrepositoryをASCIIドライブへ割り当て、終了時に解除する。ソースは複製しない。
 
 新しい検証ツールやコマンドを追加する場合は、実際に導入・実行できることを確認してからこのファイルへ追記する。
 
 ## 4. Core product invariants
+
+### Android正式署名ビルド
+
+- 正式署名APKを作る依頼では、登録済み設定を自動取得する `pwsh -NoProfile -File .\tool\build-release.ps1` を標準入口として実行する。ユーザー向けの `Build-Release.cmd` も同じ処理を呼ぶ。
+- 初回登録済みなら毎回のパスワード入力や鍵の再選択を要求しない。直接のreleaseビルド、手動環境変数設定、debug署名への切り替えで回避しない。
+- 未登録・復号失敗・鍵や署名の不一致は停止して原因を報告する。再登録が必要な場合だけ、ユーザーに外部PowerShellの `Setup-Signing.cmd` を案内する。
+- 秘密鍵・暗号化設定はリポジトリ外の `C:\AndroidSigning` に置く。パスワードや復号した設定を表示・ログ出力・リポジトリ保存しない。
+- 詳細とインストール前の既存版との証明書照合は `docs/release-signing.md` に従う。署名ビルド成功と端末更新・GitHub公開は別の完了条件として扱う。
 
 次は明示的な仕様変更タスクでない限り維持してください。
 
@@ -93,7 +103,7 @@ Windowsでは親パス`E:\\作ってみた`の非ASCII文字をAndroid Gradle Pl
 - 味評価は本人の理想を0とする`-2..+2`の偏差として扱う。
 - 一度のEvaluationだけで恒久的なPreference Profileを断定しない。
 - タイマーはユーザー起動とし、終了しても自動で次Stepへ進めない。
-- Cooking mode中のみ必要に応じて画面常時点灯を有効化し、終了時に解除する。
+- 画面常時点灯は、明示的に開いたKitchen modeがforegroundの間、または既存の単独Cooking mode中に限って有効化し、終了・非表示時に解除する。Kitchen内のRecipe閲覧はKitchenが所有し、通常のRecipe閲覧では有効化しない。Phase 5の統合まではKitchen内から単独Cooking modeを開始させない。
 - アプリの起動、foreground復帰、利用、終了によって端末の画面回転設定を変更しない。Androidでは起動前、起動中、終了後の`accelerometer_rotation`と`user_rotation`が同一であることを必須とする。
 - 音声操作と現在StepのTTS読み上げはAndroid MVPの必須機能である。
 - 調理効率より食品安全を優先する。

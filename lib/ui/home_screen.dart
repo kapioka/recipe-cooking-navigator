@@ -3,18 +3,24 @@ import 'package:flutter/material.dart';
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
 import 'about_dialog.dart';
+import 'ai_recipe_request_screen.dart';
 import 'recipe_detail_screen.dart';
+import 'kitchen_screen.dart';
+import 'kitchen_scope.dart';
+import 'preference_scope.dart';
+import 'preference_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({required this.controller, super.key});
+  const HomeScreen({required this.controller, this.onOpenKitchen, super.key});
 
   final RecipeLibraryController controller;
+  final VoidCallback? onOpenKitchen;
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _searchController;
 
   RecipeLibraryController get controller => widget.controller;
@@ -37,6 +43,21 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('レシピ'),
         actions: [
+          if (PreferenceControllerScope.maybeOf(context)
+              case final preferences?)
+            IconButton(
+              key: const Key('open_preferences'),
+              tooltip: '料理の好み',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PreferenceScreen(
+                    controller: preferences,
+                    recipes: controller.recipes,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.tune),
+            ),
           IconButton(
             key: const Key('app_information_button'),
             tooltip: 'このアプリについて',
@@ -52,6 +73,41 @@ class _HomeScreenState extends State<HomeScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (!KitchenScope.contains(context)) ...[
+                        FilledButton.tonalIcon(
+                          key: const Key('open_kitchen'),
+                          onPressed:
+                              widget.onOpenKitchen ??
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      KitchenScreen(library: controller),
+                                ),
+                              ),
+                          icon: const Icon(Icons.kitchen_outlined),
+                          label: const Text('キッチンツールを開く'),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      OutlinedButton.icon(
+                        key: const Key('open_recipe_archive'),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                _ArchiveScreen(controller: controller),
+                          ),
+                        ),
+                        icon: const Icon(Icons.archive_outlined),
+                        label: const Text('アーカイブ'),
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: TextField(
@@ -99,6 +155,34 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              key: const Key('create_chatgpt_recipe'),
+                              onPressed: controller.isBusy
+                                  ? null
+                                  : () => Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) =>
+                                            const AiRecipeRequestScreen(),
+                                      ),
+                                    ),
+                              child: const Text('ChatGPTでレシピを作る'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              key: const Key('paste_recipe'),
+                              onPressed: controller.isBusy
+                                  ? null
+                                  : _pasteRecipe,
+                              child: const Text('レシピを貼り付け'),
+                            ),
+                          ),
+                        ],
+                      ),
                       Row(
                         children: [
                           Expanded(
@@ -156,6 +240,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
+                if (controller.legacyDataPresent)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          '旧形式のレシピは表示していません。新しい指示文で再作成してください。旧データは削除していません。',
+                        ),
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: controller.totalRecipeCount == 0
                       ? const _EmptyLibrary()
@@ -199,11 +295,118 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _importRecipe(BuildContext context) async {
-    final result = await controller.importFromFile();
-    if (!context.mounted || result.status == RecipeImportStatus.cancelled) {
+    final preparation = await controller.prepareImportFromFile();
+    if (!context.mounted) {
+      final preview = preparation.preview;
+      if (preview != null) controller.cancelPreparedImport(preview);
+      return;
+    }
+    await _showPreparedImport(context, preparation);
+  }
+
+  Future<void> _pasteRecipe() async {
+    final source = await showDialog<String>(
+      context: context,
+      builder: (_) => const _PasteRecipeDialog(),
+    );
+    if (source == null || !mounted) return;
+    await importSharedSource(source);
+  }
+
+  Future<void> importSharedSource(String source) async {
+    final preparation = await controller.prepareImportSource(source);
+    if (!mounted) {
+      final preview = preparation.preview;
+      if (preview != null) controller.cancelPreparedImport(preview);
+      return;
+    }
+    await _showPreparedImport(context, preparation);
+  }
+
+  void showSharedImportError(String message) {
+    if (mounted) {
+      _showImportResult(
+        context,
+        RecipeImportResult(RecipeImportStatus.failed, message),
+      );
+    }
+  }
+
+  Future<void> _showPreparedImport(
+    BuildContext context,
+    RecipeImportPreparation preparation,
+  ) async {
+    if (!context.mounted) {
+      final preview = preparation.preview;
+      if (preview != null) controller.cancelPreparedImport(preview);
+      return;
+    }
+    if (preparation.status == RecipeImportPreparationStatus.cancelled) return;
+    if (preparation.status == RecipeImportPreparationStatus.failed) {
+      _showImportResult(
+        context,
+        RecipeImportResult(RecipeImportStatus.failed, preparation.message),
+      );
       return;
     }
 
+    final preview = preparation.preview!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('このレシピを取り込みますか？'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                preview.title,
+                key: const Key('recipe_import_preview_title'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Text('Version ${preview.revision}'),
+              if (preview.parentRevision case final parent?)
+                Text('Version $parentから派生'),
+              Text('${preview.servings}人分・約${preview.totalTimeMinutes}分'),
+              Text('材料 ${preview.ingredientCount}件・工程 ${preview.stepCount}件'),
+              const SizedBox(height: 12),
+              Text(
+                'レシピID: ${preview.recipeId}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              const Text('取り込むとこのVersionを端末に保存します。既存のVersionは上書きしません。'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('cancel_recipe_import'),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            key: const Key('confirm_recipe_import'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('取り込む'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      controller.cancelPreparedImport(preview);
+      return;
+    }
+
+    final result = await controller.confirmPreparedImport(preview);
+    if (!context.mounted) return;
+    _showImportResult(context, result);
+  }
+
+  void _showImportResult(BuildContext context, RecipeImportResult result) {
     final colorScheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -408,13 +611,56 @@ class _SuggestionList extends StatelessWidget {
   }
 }
 
+class _PasteRecipeDialog extends StatefulWidget {
+  const _PasteRecipeDialog();
+  @override
+  State<_PasteRecipeDialog> createState() => _PasteRecipeDialogState();
+}
+
+class _PasteRecipeDialogState extends State<_PasteRecipeDialog> {
+  final _input = TextEditingController();
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('ChatGPTのレシピを貼り付け'),
+    content: SizedBox(
+      width: 520,
+      child: TextField(
+        key: const Key('paste_recipe_source'),
+        controller: _input,
+        minLines: 5,
+        maxLines: 10,
+        decoration: const InputDecoration(
+          hintText: '回答のRecipe JSON全体を貼り付けてください',
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('キャンセル'),
+      ),
+      FilledButton(
+        key: const Key('preview_pasted_recipe'),
+        onPressed: () => Navigator.pop(context, _input.text),
+        child: const Text('内容を確認'),
+      ),
+    ],
+  );
+}
+
 class _EmptyLibrary extends StatelessWidget {
   const _EmptyLibrary();
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -513,7 +759,20 @@ class _RecipeCard extends StatelessWidget {
             ],
           ),
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: PopupMenuButton<String>(
+          tooltip: 'レシピの操作',
+          onSelected: (value) async {
+            if (value != 'archive') return;
+            final result = await controller.setArchived(recipe.id, true);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(result)));
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'archive', child: Text('アーカイブへ移す')),
+          ],
+        ),
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
@@ -525,4 +784,81 @@ class _RecipeCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ArchiveScreen extends StatelessWidget {
+  const _ArchiveScreen({required this.controller});
+
+  final RecipeLibraryController controller;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('アーカイブ')),
+    body: AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => controller.archivedRecipes.isEmpty
+          ? const Center(child: Text('アーカイブしたレシピはありません'))
+          : ListView.builder(
+              itemCount: controller.archivedRecipes.length,
+              itemBuilder: (context, index) {
+                final recipe = controller.archivedRecipes[index];
+                return ListTile(
+                  key: Key('archived_recipe_${recipe.id}'),
+                  title: Text(recipe.title),
+                  subtitle: Text('Active Version ${recipe.revision}'),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: 'アーカイブの操作',
+                    onSelected: (value) async {
+                      if (value == 'restore') {
+                        final result = await controller.setArchived(
+                          recipe.id,
+                          false,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(result)));
+                        }
+                        return;
+                      }
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('レシピを完全削除しますか？'),
+                          content: Text(
+                            '「${recipe.title}」の全Version、タグ、事前準備、調理履歴と評価を端末から削除します。元に戻せません。\n\nGoogle DriveのInboxに元ファイルが残っている場合、次の確認で再取込されます。先にDrive側の元ファイルを取り除いてください。',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: const Text('キャンセル'),
+                            ),
+                            FilledButton(
+                              key: const Key('confirm_delete_archived_recipe'),
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: const Text('完全削除'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true) return;
+                      final result = await controller.deleteArchivedRecipe(
+                        recipe.id,
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text(result)));
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'restore', child: Text('一覧へ戻す')),
+                      PopupMenuItem(value: 'delete', child: Text('完全削除')),
+                    ],
+                  ),
+                );
+              },
+            ),
+    ),
+  );
 }

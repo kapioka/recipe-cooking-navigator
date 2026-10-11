@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
 import 'cooking_entry.dart';
+import 'feedback_screen.dart';
 import 'recipe_version_history_screen.dart';
 
-class RecipeDetailScreen extends StatelessWidget {
+class RecipeDetailScreen extends StatefulWidget {
   const RecipeDetailScreen({
     required this.recipe,
     required this.controller,
@@ -16,13 +17,127 @@ class RecipeDetailScreen extends StatelessWidget {
   final RecipeLibraryController controller;
 
   @override
+  State<RecipeDetailScreen> createState() => _RecipeDetailScreenState();
+}
+
+class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
+  late int selectedServings = widget.recipe.servings;
+  late String activeIdentity = '${widget.recipe.id}:${widget.recipe.revision}';
+  Set<String> checkedPreparation = {};
+  bool preparationLoading = true;
+  bool preparationSaving = false;
+  String? preparationError;
+
+  RecipeLibraryController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreparation(widget.recipe);
+  }
+
+  Future<void> _loadPreparation(RecipeDocument recipe) async {
+    final identity = '${recipe.id}:${recipe.revision}';
+    try {
+      final checked = await controller.preparationStore.checked(
+        recipe.id,
+        recipe.revision,
+      );
+      final validIds = (recipe.recipeData['preparation'] as List<dynamic>)
+          .map((item) => (item as Map<String, dynamic>)['id'] as String)
+          .toSet();
+      if (!validIds.containsAll(checked)) {
+        throw const FormatException('保存済みの事前準備がRecipeと一致しません。');
+      }
+      if (mounted && identity == activeIdentity) {
+        setState(() {
+          checkedPreparation = checked;
+          preparationLoading = false;
+          preparationError = null;
+        });
+      }
+    } catch (_) {
+      if (mounted && identity == activeIdentity) {
+        setState(() {
+          preparationLoading = false;
+          preparationError = '事前準備を読み込めません。保存状態は変更していません。';
+        });
+      }
+    }
+  }
+
+  Future<void> _setPreparation(
+    RecipeDocument recipe,
+    String taskId,
+    bool checked,
+  ) async {
+    if (preparationSaving || preparationError != null) return;
+    setState(() => preparationSaving = true);
+    try {
+      await controller.preparationStore.setChecked(
+        recipe.id,
+        recipe.revision,
+        taskId,
+        checked,
+      );
+      if (mounted && activeIdentity == '${recipe.id}:${recipe.revision}') {
+        setState(() {
+          checkedPreparation = {...checkedPreparation};
+          if (checked) {
+            checkedPreparation.add(taskId);
+          } else {
+            checkedPreparation.remove(taskId);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => preparationError = '事前準備を保存できません。チェック状態は変更していません。');
+      }
+    } finally {
+      if (mounted) setState(() => preparationSaving = false);
+    }
+  }
+
+  Future<void> _resetPreparation(RecipeDocument recipe) async {
+    if (preparationSaving || preparationError != null) return;
+    setState(() => preparationSaving = true);
+    try {
+      await controller.preparationStore.reset(recipe.id, recipe.revision);
+      if (mounted && activeIdentity == '${recipe.id}:${recipe.revision}') {
+        setState(() => checkedPreparation = {});
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => preparationError = '事前準備をリセットできません。保存状態は変更していません。');
+      }
+    } finally {
+      if (mounted) setState(() => preparationSaving = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final activeRecipe = controller.activeRecipeFor(recipe.id) ?? recipe;
-        final latestRecipe = controller.latestRecipeFor(recipe.id);
-        final revisions = controller.revisionsFor(recipe.id);
+        final activeRecipe =
+            controller.activeRecipeFor(widget.recipe.id) ?? widget.recipe;
+        final identity = '${activeRecipe.id}:${activeRecipe.revision}';
+        if (identity != activeIdentity) {
+          activeIdentity = identity;
+          selectedServings = activeRecipe.servings;
+          checkedPreparation = {};
+          preparationLoading = true;
+          preparationError = null;
+          _loadPreparation(activeRecipe);
+        }
+        final cookingContext = activeRecipe.contextFor(selectedServings);
+        final ingredientSummaries = activeRecipe.ingredientSummaries(
+          cookingContext,
+        );
+        final latestRecipe = controller.latestRecipeFor(widget.recipe.id);
+        final revisions = controller.revisionsFor(widget.recipe.id);
         final tags = controller.tagsFor(activeRecipe.id);
         final utensils = activeRecipe.recipeData['utensils'] as List;
         final preparation = activeRecipe.recipeData['preparation'] as List;
@@ -50,8 +165,15 @@ class RecipeDetailScreen extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  Chip(label: Text('${activeRecipe.servings}人分')),
-                  Chip(label: Text('${activeRecipe.totalTimeMinutes}分')),
+                  Chip(
+                    key: const Key('selected_servings_chip'),
+                    label: Text('$selectedServings人分'),
+                  ),
+                  Chip(
+                    label: Text(
+                      '目安${activeRecipe.totalTimeMinutes}分（基準${activeRecipe.servings}人分）',
+                    ),
+                  ),
                   Chip(
                     label: Text('AI想定難易度 ${activeRecipe.estimatedDifficulty}'),
                   ),
@@ -65,6 +187,57 @@ class RecipeDetailScreen extends StatelessWidget {
                       label: Text('Latest Version ${latestRecipe.revision}'),
                     ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              Semantics(
+                label: '調理人数、現在$selectedServings人分',
+                child: Row(
+                  children: [
+                    IconButton.outlined(
+                      key: const Key('decrease_servings'),
+                      tooltip: '人数を1人減らす',
+                      onPressed: selectedServings > activeRecipe.minServings
+                          ? () => setState(() => selectedServings--)
+                          : null,
+                      icon: const Icon(Icons.remove),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '基準 ${activeRecipe.servings}人分 → 選択 $selectedServings人分',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    IconButton.outlined(
+                      key: const Key('increase_servings'),
+                      tooltip: '人数を1人増やす',
+                      onPressed: selectedServings < activeRecipe.maxServings
+                          ? () => setState(() => selectedServings++)
+                          : null,
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('reset_servings'),
+                  onPressed: selectedServings == activeRecipe.servings
+                      ? null
+                      : () => setState(
+                          () => selectedServings = activeRecipe.servings,
+                        ),
+                  child: const Text('基準人数に戻す'),
+                ),
+              ),
+              Text(
+                activeRecipe.minServings == activeRecipe.maxServings
+                    ? 'このレシピは人数変更できません。${activeRecipe.servingAdjustmentNote}'
+                    : selectedServings == activeRecipe.servings
+                    ? activeRecipe.servingAdjustmentNote
+                    : '材料を$selectedServings人分に換算しています。加熱時間・火加減・器具は自動調整されません。\n${activeRecipe.servingAdjustmentNote}',
+                key: const Key('serving_adjustment_note'),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -85,6 +258,21 @@ class RecipeDetailScreen extends StatelessWidget {
                 key: ValueKey('${activeRecipe.id}:${activeRecipe.revision}'),
                 recipe: activeRecipe,
                 controller: controller,
+                cookingContext: cookingContext,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('open_feedback'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => FeedbackScreen(
+                      recipeId: activeRecipe.id,
+                      controller: controller,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.rate_review_outlined),
+                label: const Text('調理後の評価・ChatGPTで改善'),
               ),
               const SizedBox(height: 16),
               Row(
@@ -115,14 +303,23 @@ class RecipeDetailScreen extends StatelessWidget {
               const SizedBox(height: 24),
               Text('材料', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              ...activeRecipe.ingredients.map(
+              ...ingredientSummaries.map(
                 (ingredient) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(ingredient.name),
                   trailing: Text(ingredient.quantity),
-                  subtitle: ingredient.note == null
+                  subtitle:
+                      [
+                        ingredient.details,
+                        ingredient.note,
+                      ].whereType<String>().isEmpty
                       ? null
-                      : Text(ingredient.note!),
+                      : Text(
+                          [
+                            ingredient.details,
+                            ingredient.note,
+                          ].whereType<String>().join('\n'),
+                        ),
                 ),
               ),
               if (utensils.isNotEmpty) ...[
@@ -136,22 +333,76 @@ class RecipeDetailScreen extends StatelessWidget {
                     trailing: Text('${utensil['quantity']}'),
                     subtitle: utensil['reuse_note'] == null
                         ? null
-                        : Text(utensil['reuse_note'] as String),
+                        : Text(
+                            activeRecipe
+                                .renderText(
+                                  utensil['reuse_note'] as List<dynamic>,
+                                  cookingContext,
+                                )
+                                .displayText,
+                          ),
                   ),
               ],
               if (preparation.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Text('事前準備', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                for (final entry in preparation.indexed)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      radius: 13,
-                      child: Text('${entry.$1 + 1}'),
+                if (preparationLoading) const LinearProgressIndicator(),
+                if (preparationError != null) ...[
+                  Text(
+                    preparationError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
-                    title: Text(entry.$2['text'] as String),
                   ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        preparationLoading = true;
+                        preparationError = null;
+                      });
+                      _loadPreparation(activeRecipe);
+                    },
+                    child: const Text('再読み込み'),
+                  ),
+                ],
+                for (final entry in preparation.indexed)
+                  CheckboxListTile(
+                    key: Key('preparation_${entry.$2['id']}'),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: checkedPreparation.contains(entry.$2['id']),
+                    onChanged:
+                        preparationLoading ||
+                            preparationSaving ||
+                            preparationError != null
+                        ? null
+                        : (value) => _setPreparation(
+                            activeRecipe,
+                            entry.$2['id'] as String,
+                            value ?? false,
+                          ),
+                    title: Text(
+                      activeRecipe
+                          .renderText(
+                            entry.$2['text'] as List<dynamic>,
+                            cookingContext,
+                          )
+                          .displayText,
+                    ),
+                  ),
+                if (checkedPreparation.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      key: const Key('reset_preparation'),
+                      onPressed: preparationSaving || preparationError != null
+                          ? null
+                          : () => _resetPreparation(activeRecipe),
+                      child: const Text('チェックをリセット'),
+                    ),
+                  ),
+                const Text('チェックはこのVersionに保存されます。次回の調理前に再確認してください。'),
               ],
               const SizedBox(height: 20),
               Text('全体工程', style: Theme.of(context).textTheme.titleLarge),
@@ -164,7 +415,13 @@ class RecipeDetailScreen extends StatelessWidget {
                     children: [
                       CircleAvatar(radius: 13, child: Text('${entry.$1 + 1}')),
                       const SizedBox(width: 12),
-                      Expanded(child: Text(entry.$2)),
+                      Expanded(
+                        child: Text(
+                          activeRecipe
+                              .renderText(entry.$2, cookingContext)
+                              .displayText,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -179,8 +436,10 @@ class RecipeDetailScreen extends StatelessWidget {
   Future<void> _editTags(BuildContext context) async {
     final saved = await showDialog<bool>(
       context: context,
-      builder: (_) =>
-          _RecipeTagEditorDialog(recipeId: recipe.id, controller: controller),
+      builder: (_) => _RecipeTagEditorDialog(
+        recipeId: widget.recipe.id,
+        controller: controller,
+      ),
     );
 
     if (saved == true && context.mounted) {

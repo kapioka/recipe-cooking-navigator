@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/cooking_store.dart';
+import '../data/recipe_archive_store.dart';
+import '../data/preparation_checklist_store.dart';
 import '../data/recipe_document_store.dart';
 import '../data/recipe_inbox_state_store.dart';
 import '../data/recipe_tag_store.dart';
@@ -15,6 +17,35 @@ import '../domain/search_text.dart';
 typedef RecipeSourcePicker = Future<String?> Function();
 
 enum RecipeImportStatus { imported, alreadyExists, cancelled, failed }
+
+enum RecipeImportPreparationStatus { ready, cancelled, failed }
+
+class RecipeImportPreview {
+  const RecipeImportPreview._(this._document);
+
+  final RecipeDocument _document;
+
+  String get title => _document.title;
+  String get recipeId => _document.id;
+  int get revision => _document.revision;
+  int? get parentRevision => _document.parentRevision;
+  int get servings => _document.servings;
+  int get totalTimeMinutes => _document.totalTimeMinutes;
+  int get ingredientCount => _document.ingredients.length;
+  int get stepCount => _document.steps.length;
+}
+
+class RecipeImportPreparation {
+  const RecipeImportPreparation({
+    required this.status,
+    required this.message,
+    this.preview,
+  });
+
+  final RecipeImportPreparationStatus status;
+  final String message;
+  final RecipeImportPreview? preview;
+}
 
 class RecipeImportResult {
   const RecipeImportResult(this.status, this.message);
@@ -104,20 +135,27 @@ class RecipeLibraryController extends ChangeNotifier {
     this._validator,
     this._pickRecipeSource, {
     CookingStore? cookingStore,
+    PreparationChecklistStore? preparationStore,
     RecipeInboxPlatform? recipeInboxPlatform,
     RecipeInboxStateStore? recipeInboxStateStore,
     RecipeVersionStateStore? recipeVersionStateStore,
+    RecipeArchiveStore? archiveStore,
+    this.legacyDataPresent = false,
   }) : assert(
          (recipeInboxPlatform == null) == (recipeInboxStateStore == null),
          'Inbox platform and state store must be provided together.',
        ),
        cookingStore = cookingStore ?? CookingStore(),
+       preparationStore = preparationStore ?? PreparationChecklistStore(),
        _recipeInboxPlatform = recipeInboxPlatform,
        _recipeInboxStateStore = recipeInboxStateStore,
        _recipeVersionStateStore =
-           recipeVersionStateStore ?? MemoryRecipeVersionStateStore();
+           recipeVersionStateStore ?? MemoryRecipeVersionStateStore(),
+       _archiveStore = archiveStore ?? RecipeArchiveStore();
 
   final CookingStore cookingStore;
+  final PreparationChecklistStore preparationStore;
+  final bool legacyDataPresent;
 
   RecipeDocument? revisionFor(String id, int revision) {
     for (final document in _documents) {
@@ -164,16 +202,22 @@ class RecipeLibraryController extends ChangeNotifier {
   final RecipeInboxPlatform? _recipeInboxPlatform;
   final RecipeInboxStateStore? _recipeInboxStateStore;
   final RecipeVersionStateStore _recipeVersionStateStore;
+  final RecipeArchiveStore _archiveStore;
 
   List<RecipeDocument> _documents = const [];
   List<RecipeDocument> _latestRecipes = const [];
   List<RecipeDocument> _activeRecipes = const [];
+  List<RecipeDocument> _archivedRecipes = const [];
+  Set<String> _archivedIds = const {};
+  String? _archiveLoadError;
+  bool _archiveReadable = true;
   List<RecipeDocument> _visibleRecipes = const [];
   Map<String, int> _activeRevisionsByRecipeId = const {};
   Map<String, List<String>> _tagsByRecipeId = const {};
   List<RecipeSearchSuggestion> _searchSuggestions = const [];
   String _searchQuery = '';
   bool _isImporting = false;
+  RecipeImportPreview? _pendingFileImport;
   bool _isCheckingInbox = false;
   bool _isSelectingInboxFolder = false;
   Future<RecipeInboxRunResult>? _activeInboxCheck;
@@ -184,6 +228,8 @@ class RecipeLibraryController extends ChangeNotifier {
   bool _versionStateReadable = true;
 
   List<RecipeDocument> get recipes => _visibleRecipes;
+  List<RecipeDocument> get archivedRecipes =>
+      List.unmodifiable(_archivedRecipes);
   int get totalRecipeCount => _activeRecipes.length;
   String get searchQuery => _searchQuery;
   List<RecipeSearchSuggestion> get searchSuggestions => _searchSuggestions;
@@ -194,7 +240,11 @@ class RecipeLibraryController extends ChangeNotifier {
   bool get isBusy => _isImporting || isInboxBusy;
   RecipeInboxFolder? get inboxFolder => _inboxFolder;
   String? get loadError {
-    final messages = <String>[?_loadError, ?_versionStateLoadError];
+    final messages = <String>[
+      ?_loadError,
+      ?_versionStateLoadError,
+      ?_archiveLoadError,
+    ];
     return messages.isEmpty ? null : messages.join('\n');
   }
 
@@ -215,6 +265,7 @@ class RecipeLibraryController extends ChangeNotifier {
       _documents = const [];
       _latestRecipes = const [];
       _activeRecipes = const [];
+      _archivedRecipes = const [];
       _visibleRecipes = const [];
       _activeRevisionsByRecipeId = const {};
       _tagsByRecipeId = const {};
@@ -257,6 +308,16 @@ class RecipeLibraryController extends ChangeNotifier {
           : '保存済みタグを読み込めませんでした。';
     }
 
+    try {
+      _archivedIds = await _archiveStore.load();
+      _archiveReadable = true;
+      _archiveLoadError = null;
+      _rebuildActiveRecipes();
+    } catch (_) {
+      _archiveReadable = false;
+      _archiveLoadError = 'アーカイブを読み込めませんでした。アーカイブ操作と完全削除は停止しています。';
+    }
+
     final inboxStateStore = _recipeInboxStateStore;
     if (inboxStateStore != null) {
       try {
@@ -273,31 +334,130 @@ class RecipeLibraryController extends ChangeNotifier {
   }
 
   Future<RecipeImportResult> importFromFile() async {
-    _isImporting = true;
-    notifyListeners();
+    final preparation = await prepareImportFromFile();
+    return switch (preparation.status) {
+      RecipeImportPreparationStatus.ready => confirmPreparedImport(
+        preparation.preview!,
+      ),
+      RecipeImportPreparationStatus.cancelled => RecipeImportResult(
+        RecipeImportStatus.cancelled,
+        preparation.message,
+      ),
+      RecipeImportPreparationStatus.failed => RecipeImportResult(
+        RecipeImportStatus.failed,
+        preparation.message,
+      ),
+    };
+  }
+
+  Future<RecipeImportPreparation> prepareImportFromFile() async {
+    final busy = _beginPreparedImport();
+    if (busy != null) return busy;
 
     try {
       final source = await _pickRecipeSource();
       if (source == null) {
-        return const RecipeImportResult(
-          RecipeImportStatus.cancelled,
-          '取り込みをキャンセルしました。',
+        _finishPreparedImport();
+        return const RecipeImportPreparation(
+          status: RecipeImportPreparationStatus.cancelled,
+          message: '取り込みをキャンセルしました。',
         );
       }
-      return await importSource(source);
+      return _prepareImportSource(source);
     } on RecipeImportException catch (error) {
-      return RecipeImportResult(RecipeImportStatus.failed, error.message);
+      _finishPreparedImport();
+      return RecipeImportPreparation(
+        status: RecipeImportPreparationStatus.failed,
+        message: error.message,
+      );
+    } on RecipeStorageException catch (error) {
+      _finishPreparedImport();
+      return RecipeImportPreparation(
+        status: RecipeImportPreparationStatus.failed,
+        message: error.message,
+      );
+    } catch (_) {
+      _finishPreparedImport();
+      return const RecipeImportPreparation(
+        status: RecipeImportPreparationStatus.failed,
+        message: 'ファイルを読み込めませんでした。もう一度お試しください。',
+      );
+    }
+  }
+
+  Future<RecipeImportPreparation> prepareImportSource(String source) async {
+    final busy = _beginPreparedImport();
+    if (busy != null) return busy;
+    try {
+      return _prepareImportSource(source);
+    } on RecipeImportException catch (error) {
+      _finishPreparedImport();
+      return RecipeImportPreparation(
+        status: RecipeImportPreparationStatus.failed,
+        message: error.message,
+      );
+    } catch (_) {
+      _finishPreparedImport();
+      return const RecipeImportPreparation(
+        status: RecipeImportPreparationStatus.failed,
+        message: '共有されたレシピを読み込めませんでした。',
+      );
+    }
+  }
+
+  RecipeImportPreparation? _beginPreparedImport() {
+    if (_isImporting) {
+      return const RecipeImportPreparation(
+        status: RecipeImportPreparationStatus.failed,
+        message: '別のレシピを確認中です。完了してからもう一度お試しください。',
+      );
+    }
+    _isImporting = true;
+    notifyListeners();
+    return null;
+  }
+
+  RecipeImportPreparation _prepareImportSource(String source) {
+    final preview = RecipeImportPreview._(_validator.validateSource(source));
+    _pendingFileImport = preview;
+    return RecipeImportPreparation(
+      status: RecipeImportPreparationStatus.ready,
+      message: '取り込むレシピを確認してください。',
+      preview: preview,
+    );
+  }
+
+  Future<RecipeImportResult> confirmPreparedImport(
+    RecipeImportPreview preview,
+  ) async {
+    if (!identical(preview, _pendingFileImport)) {
+      return const RecipeImportResult(
+        RecipeImportStatus.failed,
+        '確認中のレシピが変わったため、取り込みませんでした。',
+      );
+    }
+    try {
+      return await _importDocument(preview._document);
     } on RecipeStorageException catch (error) {
       return RecipeImportResult(RecipeImportStatus.failed, error.message);
     } catch (_) {
       return const RecipeImportResult(
         RecipeImportStatus.failed,
-        'ファイルを読み込めませんでした。もう一度お試しください。',
+        'レシピを保存できませんでした。保存済みデータは変更していません。',
       );
     } finally {
-      _isImporting = false;
-      notifyListeners();
+      if (identical(preview, _pendingFileImport)) _finishPreparedImport();
     }
+  }
+
+  void cancelPreparedImport(RecipeImportPreview preview) {
+    if (identical(preview, _pendingFileImport)) _finishPreparedImport();
+  }
+
+  void _finishPreparedImport() {
+    _pendingFileImport = null;
+    _isImporting = false;
+    notifyListeners();
   }
 
   Future<RecipeInboxFolderSelectionResult> selectInboxFolder() async {
@@ -418,9 +578,6 @@ class RecipeLibraryController extends ChangeNotifier {
       _inboxFolder = folder;
 
       final inboxFiles = await platform.readFiles(folder);
-      final receiptsByKey = <String, RecipeInboxReceipt>{
-        for (final receipt in state.receipts) receipt.contentKey: receipt,
-      };
       final newReceipts = <RecipeInboxReceipt>[];
       final fileResults = <RecipeInboxFileResult>[];
 
@@ -431,20 +588,6 @@ class RecipeLibraryController extends ChangeNotifier {
               fileName: inboxFile.name,
               status: RecipeInboxFileStatus.rejected,
               message: inboxFile.readError ?? 'ファイルを読み込めませんでした。',
-            ),
-          );
-          continue;
-        }
-
-        final contentKey = '${inboxFile.documentId}\u0000${inboxFile.sha256}';
-        final priorReceipt = receiptsByKey[contentKey];
-        if (priorReceipt != null &&
-            revisionFor(priorReceipt.recipeId, priorReceipt.revision) != null) {
-          fileResults.add(
-            RecipeInboxFileResult(
-              fileName: inboxFile.name,
-              status: RecipeInboxFileStatus.skipped,
-              message: '同一内容を確認済みです。',
             ),
           );
           continue;
@@ -487,7 +630,6 @@ class RecipeLibraryController extends ChangeNotifier {
             recipeId: outcome.document.id,
             revision: outcome.document.revision,
           );
-          receiptsByKey[receipt.contentKey] = receipt;
           newReceipts.add(receipt);
         } on RecipeImportException catch (error) {
           fileResults.add(
@@ -568,6 +710,15 @@ class RecipeLibraryController extends ChangeNotifier {
   @visibleForTesting
   Future<RecipeImportResult> importSource(String source) async {
     final outcome = await _saveSource(source);
+    return _resultFor(outcome);
+  }
+
+  Future<RecipeImportResult> _importDocument(RecipeDocument document) async {
+    final outcome = await _saveDocument(document);
+    return _resultFor(outcome);
+  }
+
+  RecipeImportResult _resultFor(_RecipeSaveOutcome outcome) {
     final document = outcome.document;
 
     switch (outcome.storeResult) {
@@ -590,8 +741,10 @@ class RecipeLibraryController extends ChangeNotifier {
   }
 
   Future<_RecipeSaveOutcome> _saveSource(String source) =>
+      _saveDocument(_validator.validateSource(source));
+
+  Future<_RecipeSaveOutcome> _saveDocument(RecipeDocument document) =>
       _synchronizeLibraryMutation(() async {
-        final document = _validator.validateSource(source);
         final storeResult = await _store.saveDocument(document.raw);
         if (storeResult == StoreRecipeResult.added) {
           _documents = [..._documents, document];
@@ -672,7 +825,7 @@ class RecipeLibraryController extends ChangeNotifier {
   Future<RecipeTagSaveResult> setTags(
     String recipeId,
     Iterable<String> values,
-  ) async {
+  ) => _synchronizeLibraryMutation(() async {
     final uniqueTags = <String, String>{};
     for (final value in values) {
       final displayValue = value.trim();
@@ -711,7 +864,7 @@ class RecipeLibraryController extends ChangeNotifier {
         'タグを保存できませんでした。',
       );
     }
-  }
+  });
 
   void _rebuildLatestRecipes() {
     final latestById = <String, RecipeDocument>{};
@@ -727,19 +880,100 @@ class RecipeLibraryController extends ChangeNotifier {
   }
 
   void _rebuildActiveRecipes() {
+    final allRecipes = _latestRecipes
+        .map((latest) {
+          final selectedRevision = _activeRevisionsByRecipeId[latest.id];
+          return selectedRevision == null
+              ? latest
+              : revisionFor(latest.id, selectedRevision) ?? latest;
+        })
+        .toList(growable: false);
     _activeRecipes =
-        _latestRecipes
-            .map((latest) {
-              final selectedRevision = _activeRevisionsByRecipeId[latest.id];
-              return selectedRevision == null
-                  ? latest
-                  : revisionFor(latest.id, selectedRevision) ?? latest;
-            })
-            .toList(growable: false)
+        allRecipes.where((r) => !_archivedIds.contains(r.id)).toList()
+          ..sort((a, b) => a.title.compareTo(b.title));
+    _archivedRecipes =
+        allRecipes.where((r) => _archivedIds.contains(r.id)).toList()
           ..sort((a, b) => a.title.compareTo(b.title));
     _rebuildSearch();
     _refreshVersionStateLoadError();
   }
+
+  Future<String> setArchived(String recipeId, bool archived) =>
+      _synchronizeLibraryMutation(() async {
+        if (!_archiveReadable) return 'アーカイブを読み込めないため、変更していません。';
+        if (latestRecipeFor(recipeId) == null) return 'レシピが見つかりません。';
+        try {
+          await _archiveStore.setArchived(recipeId, archived);
+          final updated = Set<String>.of(_archivedIds);
+          if (archived) {
+            updated.add(recipeId);
+          } else {
+            updated.remove(recipeId);
+          }
+          _archivedIds = updated;
+          _rebuildActiveRecipes();
+          notifyListeners();
+          return archived ? 'レシピをアーカイブへ移しました。' : 'レシピを一覧へ戻しました。';
+        } catch (_) {
+          return 'アーカイブを保存できませんでした。変更していません。';
+        }
+      });
+
+  Future<String> deleteArchivedRecipe(String recipeId) =>
+      _synchronizeLibraryMutation(() async {
+        if (!_archiveReadable || !_archivedIds.contains(recipeId)) {
+          return 'アーカイブ内のレシピだけを完全削除できます。';
+        }
+        final documentStore = _store;
+        final versionStore = _recipeVersionStateStore;
+        if (documentStore is! RecipeDocumentDeletionStore ||
+            versionStore is! RecipeVersionStateDeletionStore) {
+          return 'この保存先では完全削除を利用できません。';
+        }
+        try {
+          // Read every affected store before the first destructive write.
+          for (final raw in await _store.loadDocuments()) {
+            _validator.validateDocument(raw);
+          }
+          await _tagStore.loadTags();
+          await _recipeVersionStateStore.loadActiveRevisions();
+          await cookingStore.read();
+          for (final revision in revisionsFor(recipeId)) {
+            await preparationStore.checked(recipeId, revision.revision);
+          }
+          await _archiveStore.load();
+        } catch (_) {
+          return '関連データを読み込めないため、削除していません。';
+        }
+        try {
+          // Keep the Recipe and archive marker until the dependent stores
+          // have been cleared, so an interrupted deletion remains retryable.
+          await cookingStore.deleteRecipe(recipeId);
+          await preparationStore.deleteRecipe(recipeId);
+          await _tagStore.saveTags(recipeId, const []);
+          await (versionStore as RecipeVersionStateDeletionStore).deleteRecipe(
+            recipeId,
+          );
+          await (documentStore as RecipeDocumentDeletionStore).deleteRecipe(
+            recipeId,
+          );
+          _documents = _documents.where((d) => d.id != recipeId).toList();
+          _activeRevisionsByRecipeId = {..._activeRevisionsByRecipeId}
+            ..remove(recipeId);
+          _tagsByRecipeId = {..._tagsByRecipeId}..remove(recipeId);
+          _rebuildLatestRecipes();
+          notifyListeners();
+        } catch (_) {
+          return '完全削除を完了できませんでした。レシピはアーカイブに残しています。再試行してください。';
+        }
+        try {
+          await _archiveStore.setArchived(recipeId, false);
+          _archivedIds = Set.of(_archivedIds)..remove(recipeId);
+          return 'レシピと関連する端末内データを完全削除しました。';
+        } catch (_) {
+          return 'レシピ本体は削除しましたが、アーカイブ記録の整理に失敗しました。次回の取込前に再確認してください。';
+        }
+      });
 
   void _refreshVersionStateLoadError() {
     if (!_versionStateReadable) return;

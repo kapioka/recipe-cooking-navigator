@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
+import 'feedback_screen.dart';
 
 class RecipeVersionHistoryScreen extends StatefulWidget {
   const RecipeVersionHistoryScreen({
@@ -60,6 +61,15 @@ class _RecipeVersionHistoryScreenState
                         isBusy: _savingRevision != null,
                         isSaving: _savingRevision == revision.revision,
                         onActivate: () => _activate(revision),
+                        onImprove: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => FeedbackScreen(
+                              recipeId: revision.id,
+                              controller: widget.controller,
+                              initialImprovementRevision: revision.revision,
+                            ),
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -113,6 +123,7 @@ class _VersionCard extends StatelessWidget {
     required this.isBusy,
     required this.isSaving,
     required this.onActivate,
+    required this.onImprove,
   });
 
   final RecipeDocument revision;
@@ -121,6 +132,7 @@ class _VersionCard extends StatelessWidget {
   final bool isBusy;
   final bool isSaving;
   final VoidCallback onActivate;
+  final VoidCallback onImprove;
 
   @override
   Widget build(BuildContext context) {
@@ -155,17 +167,29 @@ class _VersionCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(parent == null ? '最初のVersion' : 'Version $parentから派生'),
-            if (!isActive) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonal(
-                  key: Key('activate_revision_${revision.revision}'),
-                  onPressed: isBusy ? null : onActivate,
-                  child: Text(isSaving ? '保存中…' : 'activeにする'),
-                ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    key: Key('improve_revision_${revision.revision}'),
+                    onPressed: isBusy ? null : onImprove,
+                    icon: const Icon(Icons.auto_fix_high_outlined),
+                    label: const Text('このVersionをChatGPTで調整'),
+                  ),
+                  if (!isActive)
+                    FilledButton.tonal(
+                      key: Key('activate_revision_${revision.revision}'),
+                      onPressed: isBusy ? null : onActivate,
+                      child: Text(isSaving ? '保存中…' : 'activeにする'),
+                    ),
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ),

@@ -20,12 +20,16 @@ import java.util.Locale
 class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
     private var inboxChannel: RecipeInboxChannel? = null
+    private var feedbackArchiveChannel: FeedbackArchiveChannel? = null
+    private var shareChannel: RecipeShareChannel? = null
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var voiceWanted = false
     private var speaking = false
     private var cooking = false
+    private var kitchenAwake = false
+    private var foreground = false
     private var cancellingRecognition = false
     private var recognitionActive = false
     private var suppressTtsError = false
@@ -33,12 +37,27 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.plugins.add(KitchenNotificationPlugin())
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "recipe/kitchen")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "elapsedRealtime" -> result.success(android.os.SystemClock.elapsedRealtime())
+                    "bootCount" -> result.success(android.provider.Settings.Global.getInt(
+                        contentResolver, android.provider.Settings.Global.BOOT_COUNT, -1))
+                    "setAwake" -> {
+                        kitchenAwake = call.arguments == true
+                        updateScreenAwake()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "recipe/cooking")
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "wake" -> {
                     cooking = true
-                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    updateScreenAwake()
                     result.success(null)
                 }
                 "voice" -> {
@@ -85,6 +104,33 @@ class MainActivity : FlutterActivity() {
             }
         }
         inboxChannel = RecipeInboxChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+        feedbackArchiveChannel = FeedbackArchiveChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+        shareChannel = RecipeShareChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+        AiRequestChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+        shareChannel?.accept(intent)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "recipe/feedback")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "shareJson" -> {
+                        val source = call.arguments as? String
+                        if (source.isNullOrBlank() || source.toByteArray(Charsets.UTF_8).size > 1024 * 1024) {
+                            result.error("invalid_feedback", "共有するFeedbackが正しくありません。", null)
+                        } else {
+                            try {
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, source)
+                                }
+                                startActivity(Intent.createChooser(send, "Feedbackを共有"))
+                                result.success(null)
+                            } catch (error: Exception) {
+                                result.error("share_failed", "共有画面を開けませんでした。", null)
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 val language = tts?.setLanguage(Locale.JAPAN)
@@ -225,11 +271,34 @@ class MainActivity : FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         inboxChannel?.onActivityResult(requestCode, resultCode, data)
+        feedbackArchiveChannel?.onActivityResult(requestCode, resultCode, data)
     }
     private fun closeCooking() {
         cooking = false; voiceWanted = false; speaking = false
         cancelRecognition(); stopSpeakingIntentionally()
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        updateScreenAwake()
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        shareChannel?.accept(intent)
+    }
+    private fun updateScreenAwake() {
+        if (foreground && (cooking || kitchenAwake)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+        updateScreenAwake()
+    }
+    override fun onPause() {
+        foreground = false
+        updateScreenAwake()
+        super.onPause()
     }
     override fun onStop() {
         voiceWanted = false; cancelRecognition(); stopSpeakingIntentionally()
@@ -239,10 +308,14 @@ class MainActivity : FlutterActivity() {
     }
     override fun onStart() {
         super.onStart()
-        if (cooking) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        updateScreenAwake()
     }
     override fun onDestroy() {
+        foreground = false
+        kitchenAwake = false
         inboxChannel?.dispose()
+        feedbackArchiveChannel?.dispose()
+        shareChannel?.dispose()
         closeCooking(); recognizer?.destroy(); tts?.shutdown(); super.onDestroy()
     }
 }

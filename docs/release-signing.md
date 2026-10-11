@@ -12,37 +12,34 @@
 - APKへ署名した秘密鍵は共有しない。証明書fingerprintは公開してよい。
 - 端末に異なる鍵の同一packageが入っている場合、明示承認なしでアンインストールしない。
 
-## 1. 専用keystoreを作成する
+## 1. 初回だけ既存鍵を登録する
 
-keystoreは必ずリポジトリ外の非公開パスへ作成します。次のコマンドはパスワードを画面へ表示せず、ファイルやコマンド履歴にも保存しません。
+プロジェクト直下の `Setup-Signing.cmd` をダブルクリックする。外部PowerShellのファイル選択で、現在の正式版に使っている既存鍵を選ぶ。更新用の鍵を新しく生成しない。
 
-```powershell
-pwsh -File .\tool\create-release-keystore.ps1 `
-  -KeystorePath '<repository-outside-private-path>\recipe-cooking-navigator-release.p12'
-```
+aliasを確認し、`Keystore password (masked with asterisks)` でパスワードを登録する。キーのパスワードが同じなら次の入力はEnterだけでよい。文字が見える入力欄では中止する。Codex内のターミナルやチャットへパスワードを入力しない。
 
-パスワードは16文字以上とし、パスワードマネージャー等へ保存します。生成後、次を別々にバックアップします。
+鍵は `C:\AndroidSigning\recipe-release.p12` へコピーされ、署名設定は同じフォルダの `recipe.signing.clixml` へ保存される。パスワードはWindows DPAPIで暗号化し、同じPC・Windowsユーザーでのみ復号する。保存先のアクセス権は現在のユーザー・SYSTEM・Administratorsに限定する。平文 `.env` や永続環境変数は使わない。鍵と復旧パスワードは別途安全にバックアップする。暗号化設定だけでは別PCへ移行できないため、新しいPCでは再登録する。
 
-- `recipe-cooking-navigator-release.p12`
-- パスワード
-- alias `recipe-cooking-navigator`
-- 表示されたSHA-256証明書fingerprint
+## 2. 毎回の正式署名ビルド
 
-鍵を失うと、GitHubから直接配布する既存アプリを同じpackageの更新として提供できません。
-
-## 2. 正式署名APKをbuildする
+プロジェクト直下の `Build-Release.cmd` をダブルクリックする。Codexからは次の同じ入口を使う。
 
 ```powershell
-pwsh -File .\tool\build-release.ps1 `
-  -KeystorePath '<repository-outside-private-path>\recipe-cooking-navigator-release.p12'
+pwsh -NoProfile -File .\tool\build-release.ps1
 ```
 
-スクリプトは最初にASCII junction側で依存Package参照を更新し、その後、パスワードを1回だけ非表示で入力します。パスワードは一時的なprocess環境変数だけでGradleへ渡し、build後に削除します。Gradle daemonもこのbuildでは無効化します。
+登録済みパスワードを自動取得し、既存Flutter wrapperでビルドする。署名情報は子プロセス用の一時環境変数にだけ設定し、終了・失敗時に元の値へ戻す。Gradle daemonとconfiguration cacheを無効化する。
 
-成功すると次を生成します。
+Issue #7の共有/コピー依頼を有効にする場合は、`pwsh -NoProfile -File .\tool\build-release.ps1 -PublicAiV2Ready`を使う。公開mainのAI入口・Workflow・v2 Schema・連携仕様・参照例がこのアプリと一致することを検証してから、同じ正式署名処理へ進む。不一致や取得失敗時は停止する。
+
+未登録、鍵の欠落・変更、署名証明書の不一致は停止する。手入力やdebug署名へ自動的に切り替えない。初回に選んだ鍵とAPKの証明書を照合するが、端末の既存版との照合はインストール前に別途必要。
+
+成功時の出力:
 
 - `build/app/outputs/flutter-apk/app-release.apk`
 - `build/app/outputs/flutter-apk/SHA256SUMS.txt`
+
+旧 `build-release-interactive.ps1` も登録済み設定での同じビルドに接続する。
 
 ## 3. APKを再検証する
 
@@ -66,9 +63,9 @@ pwsh -File .\tool\verify-release.ps1 `
 
 ## 4. Pixel 10aで確認する
 
-現在のPixel 10aにはdebug鍵版が入っています。専用鍵版は署名が異なるため、通常は上書きできません。アンインストールすると端末内のRecipe、タグ、進行状態、Cook Sessionが消える可能性があります。
+Pixel 10aには専用鍵で署名したAPKが入っています。更新時は同じ鍵で署名したAPKの証明書を端末の既存APKと照合し、`adb install -r`でデータを保持して更新します。debug鍵版は署名が異なるため上書きに使いません。
 
-データを失ってよいという明示承認を得るまで、アンインストールやデータ消去を行いません。
+アンインストールやデータ消去は、端末内のRecipe、タグ、進行状態、Cook Sessionを失う可能性があるため行いません。
 
 ## 5. GitHub Releaseを公開する
 

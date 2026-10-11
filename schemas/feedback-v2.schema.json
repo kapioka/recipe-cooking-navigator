@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kapioka/recipe-cooking-navigator/schemas/feedback-v2.schema.json",
+  "title": "Recipe Cooking Navigator Feedback v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "type", "recipe_snapshot", "cook_session", "evaluation", "revision_request"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "type": {"const": "recipe_feedback"},
+    "recipe_snapshot": {"$ref": "recipe-v2.schema.json"},
+    "cook_session": {"$ref": "#/$defs/cookSession"},
+    "evaluation": {"$ref": "#/$defs/evaluation"},
+    "revision_request": {"$ref": "#/$defs/revisionRequest"}
+  },
+  "$defs": {
+    "resolvedMeasuredQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "unit"],
+      "properties": {
+        "kind": {"const": "measured"},
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["numerator", "denominator"],
+          "properties": {
+            "numerator": {"type": "string", "pattern": "^[1-9][0-9]{0,31}$"},
+            "denominator": {"type": "string", "pattern": "^[1-9][0-9]{0,31}$"}
+          }
+        },
+        "unit": {"enum": ["g", "kg", "ml", "l", "tsp", "tbsp", "piece", "slice", "clove", "stalk", "sheet", "pack", "bunch"]}
+      }
+    },
+    "resolvedQualitativeQuantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "text", "adjustment_note"],
+      "properties": {
+        "kind": {"const": "qualitative"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 40},
+        "adjustment_note": {"type": "string", "minLength": 1, "maxLength": 300}
+      }
+    },
+    "resolvedQuantity": {"oneOf": [{"$ref": "#/$defs/resolvedMeasuredQuantity"}, {"$ref": "#/$defs/resolvedQualitativeQuantity"}]},
+    "cookingContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_servings", "scaling_algorithm", "resolved_amounts"],
+      "properties": {
+        "target_servings": {"type": "integer", "minimum": 1, "maximum": 12},
+        "scaling_algorithm": {"const": "servings-v2.0"},
+        "resolved_amounts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["amount_id", "quantity"],
+            "properties": {
+              "amount_id": {"type": "string", "minLength": 1},
+              "quantity": {"$ref": "#/$defs/resolvedQuantity"}
+            }
+          }
+        }
+      }
+    },
+    "difficulty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "comment"],
+      "properties": {"score": {"type": "integer", "minimum": 1, "maximum": 5}, "comment": {"type": "string"}}
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description"],
+      "properties": {"description": {"type": "string", "minLength": 1}, "result": {"type": "string"}}
+    },
+    "cookSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "recipe_id", "recipe_revision", "recipe_snapshot", "cooking_context", "actual_time_minutes", "difficulty", "issues", "changes_made"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "recipe_id": {"type": "string", "minLength": 1},
+        "recipe_revision": {"type": "integer", "minimum": 1},
+        "recipe_snapshot": {"$ref": "recipe-v2.schema.json"},
+        "cooking_context": {"$ref": "#/$defs/cookingContext"},
+        "cooked_at": {"type": "string", "format": "date-time"},
+        "actual_time_minutes": {"type": "integer", "minimum": 1},
+        "difficulty": {"$ref": "#/$defs/difficulty"},
+        "issues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "changes_made": {"type": "array", "items": {"$ref": "#/$defs/change"}}
+      }
+    },
+    "tasteRating": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "deviation", "comment"],
+      "properties": {
+        "dimension": {"enum": ["sweetness", "saltiness", "umami", "spiciness", "acidity", "richness", "aroma", "texture"]},
+        "deviation": {"type": "integer", "minimum": -2, "maximum": 2},
+        "comment": {"type": "string"}
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall", "taste", "comment", "next_time_intent"],
+      "properties": {
+        "overall": {"type": "integer", "minimum": 1, "maximum": 5},
+        "taste": {"type": "array", "items": {"$ref": "#/$defs/tasteRating"}},
+        "comment": {"type": "string"},
+        "next_time_intent": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "revisionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preserve_successful_parts", "goal", "next_revision"],
+      "properties": {
+        "preserve_successful_parts": {"type": "boolean"},
+        "goal": {"type": "string", "minLength": 1},
+        "next_revision": {"type": "integer", "minimum": 1},
+        "notes": {"type": "string"}
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kapioka.github.io/recipe-cooking-navigator/schemas/preference-candidates-v1.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["candidate_schema_version", "type", "candidates"],
+  "properties": {
+    "candidate_schema_version": {"const": "1.0.0"}, "type": {"const": "preference_candidates"},
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}}
+  },
+  "$defs": {
+    "ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "\\S"}},
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rules_version", "scope", "dimension", "direction", "score", "feedback_ids", "session_ids", "recipe_ids", "categories", "status"],
+      "if": {"properties": {"scope": {"properties": {"kind": {"const": "global"}}}}},
+      "then": {"properties": {"categories": {"minItems": 2}}},
+      "properties": {
+        "rules_version": {"const": "1.0.0"}, "scope": {"$ref": "cooking-profile-v1.schema.json#/$defs/scope"},
+        "dimension": {"$ref": "cooking-profile-v1.schema.json#/$defs/dimension"}, "direction": {"enum": [-1, 1]},
+        "score": {"type": "integer", "minimum": 4}, "status": {"enum": ["proposed", "accepted", "rejected"]},
+        "feedback_ids": {"$ref": "#/$defs/ids", "minItems": 3}, "session_ids": {"$ref": "#/$defs/ids", "minItems": 3},
+        "recipe_ids": {"$ref": "#/$defs/ids", "minItems": 2}, "categories": {"$ref": "#/$defs/ids"}
+      }
+    }
+  }
+}
