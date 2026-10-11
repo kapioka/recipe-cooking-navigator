@@ -11,6 +11,7 @@ abstract class PocPlatform {
   Future<String?> readSecure();
   Future<void> writeSecure(String document);
   Future<void> openBrowser(String uri);
+  Future<void> waitForForeground();
   Future<String?> dictate();
 }
 
@@ -24,6 +25,9 @@ class AndroidPocPlatform implements PocPlatform {
   @override
   Future<void> openBrowser(String uri) =>
       _channel.invokeMethod<void>('openBrowser', uri);
+  @override
+  Future<void> waitForForeground() =>
+      _channel.invokeMethod<void>('waitForForeground');
   @override
   Future<String?> dictate() => _channel.invokeMethod<String>('dictate');
 }
@@ -211,8 +215,13 @@ class SiwcRuntime {
         if (!callback.isCompleted) callback.complete(null);
       },
     );
-    var stage = 'ブラウザ認証';
+    var stage = '接続確認';
     try {
+      // Fail before asking the user to authenticate when native HTTPS fails.
+      // This same metadata is required for the later identity verification.
+      await _discovery();
+      _check(epoch);
+      stage = 'ブラウザ認証';
       await platform.openBrowser(attempt.authorizationUri.toString());
       final uri = await callback.future.timeout(
         const Duration(minutes: 3),
@@ -227,6 +236,11 @@ class SiwcRuntime {
         _document['pending_client_id'] = validated.clientId;
         await _save(); // Keep registration through invalid_grant, without making it active.
       }
+      _check(epoch);
+      // The loopback callback arrives while Chrome is foreground. Resume the
+      // Android app before starting authenticated network work.
+      stage = 'アプリへの復帰待ち';
+      await platform.waitForForeground().timeout(const Duration(minutes: 3));
       _check(epoch);
       stage = '認証コードの交換';
       final tokens = await network.postForm(
@@ -263,8 +277,8 @@ class SiwcRuntime {
       }
     } on SiwcFailure catch (error) {
       throw SiwcFailure('$stage: ${error.message}');
-    } on SocketException {
-      throw SiwcFailure('$stage: 通信に接続できません。ネットワークを確認して再接続してください。');
+    } on SocketException catch (error) {
+      throw SiwcFailure('$stage: ${safeSocketFailure(error)}');
     } on HandshakeException {
       throw SiwcFailure('$stage: 安全な通信を確立できません。証明書検証を省略せず停止しました。');
     } on TimeoutException {
@@ -415,15 +429,23 @@ class SiwcRuntime {
     final body = inferenceBody(model, confirmedText);
     final epoch = _epoch;
     if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');
-    await refresh();
-    _check(epoch);
-    if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');
-    final result = await network.infer(
-      _active!['access_token'] as String,
-      body,
-    );
-    _check(epoch);
-    return result;
+    var stage = '接続情報の更新';
+    try {
+      await refresh();
+      _check(epoch);
+      if (!canInfer) throw const SiwcFailure('ChatGPT plan usageの同意・権限が必要です。');
+      stage = 'AIへの送信・回答の受信';
+      final result = await network.infer(
+        _active!['access_token'] as String,
+        body,
+      );
+      _check(epoch);
+      return result;
+    } on SiwcFailure catch (error) {
+      throw SiwcFailure('$stage: ${error.message}');
+    } catch (error) {
+      throw SiwcFailure('$stage: ${safeNetworkFailure(error)}');
+    }
   }
 
   Future<bool> disconnect() async {

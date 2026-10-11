@@ -165,6 +165,8 @@ Map<String, dynamic> inferenceBody(String model, String text) {
 /// requires a completed response object, rather than an HTTP 200 or [DONE].
 Future<String> collectCompletedResponse(Stream<String> lines) async {
   final data = <String>[];
+  final streamedText = StringBuffer();
+  final doneText = <String>[];
   String? completedText;
   var received = 0;
   void consume() {
@@ -174,6 +176,16 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
     if (raw == '[DONE]') return;
     final event = jsonDecode(raw) as Map<String, dynamic>;
     final type = event['type'];
+    if (type == 'response.output_text.delta') {
+      final delta = event['delta'];
+      if (delta is! String) throw const SiwcFailure('回答テキストのイベント形式が不正です。');
+      streamedText.write(delta);
+    }
+    if (type == 'response.output_text.done') {
+      final text = event['text'];
+      if (text is! String) throw const SiwcFailure('確定テキストのイベント形式が不正です。');
+      doneText.add(text);
+    }
     if (type == 'error' ||
         type == 'response.failed' ||
         type == 'response.incomplete') {
@@ -201,9 +213,18 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
           }
         }
       }
-      completedText = parts.join();
+      // SIWC streaming can carry text in events while the terminal object's
+      // output is sparse. Match the public SDK's text-delta + completed flow.
+      // These buffers are never returned unless terminal status is completed.
+      completedText = parts.isNotEmpty
+          ? parts.join()
+          : doneText.isNotEmpty
+          ? doneText.join()
+          : streamedText.toString();
       if (completedText!.trim().isEmpty) {
-        throw const SiwcFailure('完了応答にテキストがありません。');
+        throw SiwcFailure(
+          '完了応答にテキストがありません。（出力項目: ${(response['output'] as List).length} / 受信文字: ${streamedText.length}）',
+        );
       }
     }
   }
@@ -220,6 +241,7 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
     }
     consume();
     if (completedText == null) {
+      if (received == 0) throw const SiwcFailure('回答の本文が空でした。完了回答は受信していません。');
       throw const SiwcFailure('response.completedを受信できませんでした。');
     }
     return completedText!;

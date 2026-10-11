@@ -14,6 +14,14 @@ class FakePlatform implements PocPlatform {
   Uri? auth;
   String? callbackPage;
   String? callbackType;
+  Completer<void>? foregroundHold;
+  Completer<void>? foregroundReached;
+  @override
+  Future<void> waitForForeground() async {
+    foregroundReached?.complete();
+    await foregroundHold?.future;
+  }
+
   @override
   Future<String?> readSecure() async => saved;
   @override
@@ -52,15 +60,20 @@ class FakeNetwork implements SiwcNetwork {
   int refreshes = 0;
   int inferences = 0;
   int modelRequests = 0;
+  int exchanges = 0;
   String? refreshScope;
   bool revokeFailure = false;
   bool grant = true;
+  SocketException? discoveryFailure;
+  SocketException? exchangeFailure;
+  Object? inferFailure;
   String subject = 'account';
   Completer<void>? refreshHold;
   Map<String, dynamic>? sent;
   @override
   Future<Map<String, dynamic>> getJson(Uri uri, {String? bearer}) async {
     if (uri.path.endsWith('openid-configuration')) {
+      if (discoveryFailure != null) throw discoveryFailure!;
       return {
         'issuer': issuer,
         'jwks_uri': '$issuer/jwks',
@@ -109,7 +122,9 @@ class FakeNetwork implements SiwcNetwork {
         if (refreshScope != null) 'scope': refreshScope,
       };
     }
+    exchanges++;
     expect(fields['client_id'], 'issued');
+    if (exchangeFailure != null) throw exchangeFailure!;
     expect(
       fields['redirect_uri'],
       platform.auth!.queryParameters['redirect_uri'],
@@ -136,6 +151,7 @@ class FakeNetwork implements SiwcNetwork {
   @override
   Future<String> infer(String bearer, Map<String, dynamic> body) async {
     inferences++;
+    if (inferFailure != null) throw inferFailure!;
     sent = body;
     return 'completed';
   }
@@ -145,6 +161,133 @@ class FakeNetwork implements SiwcNetwork {
 }
 
 void main() {
+  test(
+    'inference errors distinguish transport failures without exposing secrets',
+    () async {
+      final platform = FakePlatform();
+      final network = FakeNetwork(platform);
+      final runtime = SiwcRuntime(platform, network);
+      await runtime.initialize();
+      await runtime.signIn();
+      for (final entry in <Object, String>{
+        const SocketException(
+          'secret-token',
+          osError: OSError('secret-url', 7),
+        ): 'OS 7',
+        const HandshakeException('secret-certificate'): 'TLS',
+        TimeoutException('secret-request'): 'Timeout',
+        const HttpException('secret-url'): 'HTTP',
+        const FormatException('secret-body'): 'Format',
+      }.entries) {
+        network.inferFailure = entry.key;
+        await expectLater(
+          runtime.infer('detected', 'confirmed'),
+          throwsA(
+            isA<SiwcFailure>().having(
+              (error) => error.message,
+              'safe inference diagnosis',
+              allOf(
+                contains('AIへの送信・回答の受信'),
+                contains(entry.value),
+                isNot(contains('secret')),
+              ),
+            ),
+          ),
+        );
+        expect(runtime.connected, true);
+      }
+    },
+  );
+
+  test(
+    'callback waits for foreground before exchange and honors cancellation',
+    () async {
+      for (final cancel in [false, true]) {
+        final platform = FakePlatform()
+          ..foregroundHold = Completer<void>()
+          ..foregroundReached = Completer<void>();
+        final network = FakeNetwork(platform);
+        final runtime = SiwcRuntime(platform, network);
+        await runtime.initialize();
+        final signIn = runtime.signIn();
+        final result = cancel
+            ? expectLater(signIn, throwsA(isA<SiwcFailure>()))
+            : signIn;
+        await platform.foregroundReached!.future;
+        expect(network.exchanges, 0);
+        expect(runtime.connected, false);
+        if (cancel) runtime.cancel();
+        platform.foregroundHold!.complete();
+        await result;
+        expect(network.exchanges, cancel ? 0 : 1);
+        expect(runtime.canInfer, !cancel);
+      }
+    },
+  );
+
+  test(
+    'native connection failure prevents browser auth and permits safe retry',
+    () async {
+      final platform = FakePlatform();
+      final network = FakeNetwork(platform)
+        ..discoveryFailure = const SocketException(
+          'Failed host lookup: secret-host?code=secret-code',
+          osError: OSError('secret OS detail', 7),
+        );
+      final runtime = SiwcRuntime(platform, network);
+      await runtime.initialize();
+      final before = platform.saved;
+      await expectLater(
+        runtime.signIn(),
+        throwsA(
+          isA<SiwcFailure>().having(
+            (error) => error.message,
+            'safe connection diagnosis',
+            allOf(
+              contains('接続確認'),
+              contains('接続先の名前'),
+              contains('OS 7'),
+              isNot(contains('secret')),
+            ),
+          ),
+        ),
+      );
+      expect(platform.auth, isNull);
+      expect(platform.saved, before);
+      expect(runtime.connected, false);
+      network.discoveryFailure = null;
+      await runtime.signIn();
+      expect(runtime.canInfer, true);
+    },
+  );
+
+  test('exchange socket diagnosis exposes only stage and OS number', () async {
+    final platform = FakePlatform();
+    final network = FakeNetwork(platform)
+      ..exchangeFailure = const SocketException(
+        'secret-token secret-code secret-url',
+        osError: OSError('secret account address', 101),
+      );
+    final runtime = SiwcRuntime(platform, network);
+    await runtime.initialize();
+    await expectLater(
+      runtime.signIn(),
+      throwsA(
+        isA<SiwcFailure>().having(
+          (error) => error.message,
+          'safe exchange diagnosis',
+          allOf(
+            contains('認証コードの交換'),
+            contains('OS 101'),
+            isNot(contains('secret')),
+          ),
+        ),
+      ),
+    );
+    expect(runtime.connected, false);
+    expect((jsonDecode(platform.saved!) as Map)['pending_client_id'], 'issued');
+  });
+
   test('local loopback sign-in, protected persistence, model discovery and text only request', () async {
     final platform = FakePlatform();
     final network = FakeNetwork(platform);

@@ -155,6 +155,64 @@ void main() {
     expect(() => inferenceBody('model', ' '), throwsA(isA<SiwcFailure>()));
   });
 
+  test('stream text is retained but requires a validated completion', () async {
+    final delta =
+        'data: ${jsonEncode({'type': 'response.output_text.delta', 'delta': 'こんにちは'})}';
+    final done =
+        'data: ${jsonEncode({'type': 'response.output_text.done', 'text': 'こんにちは'})}';
+    final completed =
+        'data: ${jsonEncode({
+          'type': 'response.completed',
+          'response': {'status': 'completed', 'output': []},
+        })}';
+    for (final textEvents in [
+      [delta, ''],
+      [delta, '', done, ''],
+    ]) {
+      expect(
+        await collectCompletedResponse(
+          Stream.fromIterable([...textEvents, completed, '']),
+        ),
+        'こんにちは',
+      );
+      await expectLater(
+        collectCompletedResponse(Stream.fromIterable(textEvents)),
+        throwsA(isA<SiwcFailure>()),
+      );
+      await expectLater(
+        collectCompletedResponse(
+          Stream.fromIterable([
+            ...textEvents,
+            'data: {"type":"response.failed"}',
+            '',
+          ]),
+        ),
+        throwsA(isA<SiwcFailure>()),
+      );
+    }
+    final full =
+        'data: ${jsonEncode({
+          'type': 'response.completed',
+          'response': {
+            'status': 'completed',
+            'output': [
+              {
+                'type': 'message',
+                'content': [
+                  {'type': 'output_text', 'text': 'こんにちは'},
+                ],
+              },
+            ],
+          },
+        })}';
+    expect(
+      await collectCompletedResponse(
+        Stream.fromIterable([delta, '', done, '', full, '']),
+      ),
+      'こんにちは',
+    );
+  });
+
   test('SSE succeeds only after validated completed and rejects truncation/failure/incomplete', () async {
     final terminal = {
       'type': 'response.completed',

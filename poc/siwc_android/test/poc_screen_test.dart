@@ -72,8 +72,8 @@ void main() {
         '誤認識した条件',
       );
       expect(f.network.inferences, 0);
-      await tester.ensureVisible(find.byKey(const Key('edit')));
-      await tester.tap(find.byKey(const Key('edit')));
+      await tester.ensureVisible(find.byKey(const Key('confirmed_text')));
+      await tester.tap(find.byKey(const Key('confirmed_text')));
       await tester.pumpAndSettle();
       expect(f.network.inferences, 0);
       await tester.enterText(

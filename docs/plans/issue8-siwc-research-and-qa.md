@@ -1,6 +1,6 @@
 # Issue #8: SIWC Android PoC / 実装ゲート
 
-2026-10-11取得の公開一次資料に基づく。実機OAuth・推論は未実施。
+2026-10-11取得の公開一次資料に基づく。実機OAuthは当初、Wi-Fiとモバイル回線の双方で認証コード交換の名前解決に失敗（OS 7）。アプリへの復帰後に交換する修正版で認証・モデル取得まで到達。推論は完了イベントに到達したがテキストを抽出できず、途中のdelta/doneテキストを保持する修正版を端末へ更新済み。修正版でユーザーが回答の受信を確認し、実機PoCのゲートを通過した。
 
 ## 判定と契約
 
@@ -25,6 +25,11 @@ PoCはdiscoveryのissuerを照合し、同hostのHTTPS endpointだけを使う�
 推論はユーザー同意後のOAuth bearerで公開`/v1/models`と`/v1/responses`を使う。
 models配列の表示可能なslugを選び、input配列、store=false、stream=trueで送る。
 HTTP成功や部分テキストを成功扱いせず、response.completedと完了responseを検証する。
+UTF-8本文のbyte数を明示して送信する。成功2xx応答でContent-Typeが省略された場合も
+bounded SSEとして検証し、空本文・通常JSON・完了イベントなしは成功にしない。
+公式SDK例と同様にdeltaテキストを保持する。完了responseにテキストがある場合はそれを
+優先し、省略されている場合だけdone/deltaを使う。いずれもresponse.completedと
+status=completedの確認後だけ返し、途中の失敗や未完了は拒否する。
 [モデル/推論](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)
 音声/文字起こしAPI、previous_response_id、hosted toolsや非対応parameterは使わない。
 [Preview制限](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
@@ -61,7 +66,7 @@ GitHub APIも2026-10-11に確認した。chatgpt-auth-kit-flutterは2026-05-10�
 - 安全保管はAndroidKeyStoreのAES-GCMとprivate filesDirのAtomicFile。backup無効。
   token・authorization URL・callback codeをconsole/analyticsへ出さない。
 - 音声は[RecognizerIntent](https://developer.android.com/reference/android/speech/RecognizerIntent)
-  で文字起こしし、同じ編集欄へ入れる。「修正」は編集だけ、「確定して送信」だけが
+  で文字起こしし、同じ編集欄へ入れる。枠内で修正でき、「確定して送信」だけが
   推論を開始する。認識providerによるネット通信はあり得ることをUIへ表示する。
 - このPoCはテキスト推論だけ。本体のRecipe生成・Revision保存へはまだ接続しない。
 
@@ -82,12 +87,16 @@ debug検証専用であり、正式版の署名・公開を意味しない。
 
 1. 別packageのPoC APKをinstallし、本体のデータを保持したまま並存することを確認。
 2. 「ChatGPTに接続」→system browserで自分の適格なアカウントと権限を確認。
+   ブラウザを開く前にアプリから公開OIDC metadataへの接続を確認する。
+   「接続確認」で止まった場合はブラウザ認証を繰り返さず表示メッセージを確認する。
+   callback到達後もアプリがforegroundへ復帰するまで認証コード交換を待つ。
    ブラウザの「アプリに戻る」を押す。開かない場合はAndroidの戻る操作を使う。
    接続状況はアプリ画面上部に表示する。モデル一覧が出ることを確認する。
 3. 検証用の短文だけを入力し「確定して送信」。response.completed検証済みの表示と
    「完了した回答を受信しました」と回答が出ることが推論成功の証拠。
    HTTP 200だけでは合格にしない。
-4. 音声入力→認識文の「修正」→確定。認識直後/修正中/空/キャンセル時は未送信。
+4. 入力欄直下の「音声で入力」→枠内をタップして認識文を修正→「確定して送信」。
+   説明はボタンの下に表示する。認識直後/修正中/空/キャンセル時は未送信。
 5. 認証の戻る/同意拒否、loopback中のバックグラウンド/復帰、PoC再起動、期限更新、
    再ログイン、account追加/切替、通信断、利用枠不足、接続解除を確認する。
 6. 異常時は操作段階とサニタイズされた表示エラーだけを記録する。tokenや認証URL、
@@ -102,6 +111,19 @@ build/unit testsだけでは証明できない。
 を使い、PoCのpackageを指定する。戻りリンクにtoken/code/stateを含めず、OAuthの
 callbackは引き続きloopbackだけで受ける。SingleTaskとFlutter deep-link route無効化で
 既存の認証処理へ戻す。自動でブラウザを閉じるとは保証せず、押下と手動戻りを案内する。
+
+通信診断は固定の説明と[Dart SocketException](https://api.dart.dev/dart-io/SocketException-class.html)
+のOS errorCode番号だけを表示する。exception本文・接続先address・OS本文は表示しない。
+名前解決失敗とその他のsocket失敗を区別するが、番号だけで端末設定を変更しない。
+
+Androidの[Activity lifecycle](https://developer.android.com/guide/components/activities/activity-lifecycle)
+に合わせ、ブラウザ表示中にcode交換を開始せず、`onResume`でアプリへの復帰を確認してから
+開始する。復帰前のキャンセル後は交換しない。修正版ではモデル一覧まで取得できた。
+
+`tool/siwc-poc.ps1`はASCII worktreeの実pathを維持し、非ASCII pathのときだけR:へ割り当てる。
+Gradleプロセスをbuildごとに分離し、別checkoutへ付け替えたR:のnative sourceを使い続けないようにする。
+APK内のnative復帰待ちmethodの存在も確認した。旧`app-siwc-poc-foreground-debug.apk`は
+native処理が欠落していたため再インストールしない。最新artifactはチェックポイントを参照する。
 
 ## 次のゲート
 
