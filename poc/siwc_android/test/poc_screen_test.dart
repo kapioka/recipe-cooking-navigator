@@ -57,6 +57,11 @@ void main() {
             )
             .first,
       );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('dictate'))),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('dictate')));
       await tester.pumpAndSettle();
       expect(
@@ -101,6 +106,11 @@ void main() {
             )
             .first,
       );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('dictate'))),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
       for (final speech in <String?>[null, ' ']) {
         f.platform.speech = speech;
         await tester.tap(find.byKey(const Key('dictate')));

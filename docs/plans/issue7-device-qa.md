@@ -4,14 +4,14 @@
 
 ## 公開前
 
-2026-10-11の公開mainにはRecipe/Feedback v1だけがある。ローカルconsumerはv2。
-新しい`ai/AGENTS.md`、2つのWorkflow、Recipe/Feedback v2 Schemaと参照例、対応
-連携仕様を同じ公開版に揃え、リンク先が実在し内容がconsumerと一致することを
-確認するまで送信ボタンは無効にする。公開/main mergeは別の承認対象。
+2026-10-11にPR #9をmainへmergeし、`ai/AGENTS.md`、2つのWorkflow、Recipe/Feedback
+v2 Schemaと参照例、対応連携仕様を同じ公開版に揃えた。公開内容とconsumerの一致を
+確認するまで送信ボタンは無効にする。以後の仕様更新時も公開内容を照合する。
 
-公開ゲート確認後にだけ `--dart-define=RCN_PUBLIC_AI_V2_READY=true` を指定した
-検証APKをbuildする。正式署名時は`docs/release-signing.md`の入口・証明書照合を
-使う。現debug APKを正式版へ署名不一致のままinstallせず、既存データを守る。
+正式署名時は `pwsh -NoProfile -File tool/build-release.ps1 -PublicAiV2Ready` を使う。
+公開ゲートの照合後にだけ対応フラグを有効にし、登録済み設定で署名する。
+`docs/release-signing.md`に従い既存版との証明書照合後に更新する。debug APKを
+正式版へ署名不一致のままinstallせず、既存データを守る。
 
 ## 最小の往復確認
 

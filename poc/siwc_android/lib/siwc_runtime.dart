@@ -179,11 +179,25 @@ class SiwcRuntime {
           request.response.statusCode = 400;
           request.response.write('Invalid callback.');
         } else {
-          request.response.headers.contentType = ContentType.text;
+          request.response.headers.contentType = ContentType.html;
           request.response.headers.set('Cache-Control', 'no-store');
           request.response.headers.set('Referrer-Policy', 'no-referrer');
           request.response.write(
-            'Return to Recipe SIWC PoC to check the result.',
+            '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>アプリに戻って接続を確認</title>'
+            '<style>body{font-family:system-ui,sans-serif;line-height:1.7;'
+            'max-width:32rem;margin:3rem auto;padding:0 1.25rem;}'
+            'a{display:block;text-align:center;background:#176b48;color:white;'
+            'padding:1rem;border-radius:.75rem;text-decoration:none;}</style>'
+            '</head><body><h1>アプリに戻って接続を確認</h1>'
+            '<p>ブラウザでの手続きが終わりました。接続の結果はアプリでお知らせします。</p>'
+            '<a href="intent://auth-return/#Intent;scheme=rcn-siwc-poc;'
+            'package=com.kapioka.rcn_siwc_poc;end">アプリに戻る</a>'
+            '<p>Recipe SIWC PoCが開きます。</p>'
+            '<p>ボタンで開かない場合は、画面端から内側へスワイプするか、'
+            '画面下の「戻る」を押してアプリへ戻ってください。</p>'
+            '<p>このページを再読み込みする必要はありません。</p></body></html>',
           );
           if (!callback.isCompleted) {
             callback.complete(
