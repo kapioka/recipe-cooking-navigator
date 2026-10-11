@@ -1,6 +1,6 @@
 # Issue #8: SIWC Android PoC / 実装ゲート
 
-2026-10-11取得の公開一次資料に基づく。実機OAuth・推論は未実施。
+2026-10-11取得の公開一次資料に基づく。実機OAuthはcallbackまで到達したが、認証コード交換の通信に失敗。認証成功・完了推論は未確認。
 
 ## 判定と契約
 
@@ -82,6 +82,8 @@ debug検証専用であり、正式版の署名・公開を意味しない。
 
 1. 別packageのPoC APKをinstallし、本体のデータを保持したまま並存することを確認。
 2. 「ChatGPTに接続」→system browserで自分の適格なアカウントと権限を確認。
+   ブラウザを開く前にアプリから公開OIDC metadataへの接続を確認する。
+   「接続確認」で止まった場合はブラウザ認証を繰り返さず表示メッセージを確認する。
    ブラウザの「アプリに戻る」を押す。開かない場合はAndroidの戻る操作を使う。
    接続状況はアプリ画面上部に表示する。モデル一覧が出ることを確認する。
 3. 検証用の短文だけを入力し「確定して送信」。response.completed検証済みの表示と
@@ -102,6 +104,10 @@ build/unit testsだけでは証明できない。
 を使い、PoCのpackageを指定する。戻りリンクにtoken/code/stateを含めず、OAuthの
 callbackは引き続きloopbackだけで受ける。SingleTaskとFlutter deep-link route無効化で
 既存の認証処理へ戻す。自動でブラウザを閉じるとは保証せず、押下と手動戻りを案内する。
+
+通信診断は固定の説明と[Dart SocketException](https://api.dart.dev/dart-io/SocketException-class.html)
+のOS errorCode番号だけを表示する。exception本文・接続先address・OS本文は表示しない。
+名前解決失敗とその他のsocket失敗を区別するが、番号だけで端末設定を変更しない。
 
 ## 次のゲート
 

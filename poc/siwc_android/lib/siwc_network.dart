@@ -4,6 +4,17 @@ import 'dart:io';
 
 import 'siwc_contract.dart';
 
+/// Display fixed labels and an OS number, never exception text/addresses.
+String safeSocketFailure(SocketException error) {
+  final description = error.message.startsWith('Failed host lookup:')
+      ? '接続先の名前を確認できません。ネット接続を確認して再接続してください。'
+      : '通信に接続できません。ネット接続を確認して再接続してください。';
+  final code = error.osError?.errorCode;
+  return code == null || code == OSError.noErrorCode
+      ? description
+      : '$description（通信診断: OS $code）';
+}
+
 abstract class SiwcNetwork {
   Future<Map<String, dynamic>> getJson(Uri uri, {String? bearer});
   Future<Map<String, dynamic>> postForm(

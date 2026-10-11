@@ -211,8 +211,13 @@ class SiwcRuntime {
         if (!callback.isCompleted) callback.complete(null);
       },
     );
-    var stage = 'ブラウザ認証';
+    var stage = '接続確認';
     try {
+      // Fail before asking the user to authenticate when native HTTPS fails.
+      // This same metadata is required for the later identity verification.
+      await _discovery();
+      _check(epoch);
+      stage = 'ブラウザ認証';
       await platform.openBrowser(attempt.authorizationUri.toString());
       final uri = await callback.future.timeout(
         const Duration(minutes: 3),
@@ -263,8 +268,8 @@ class SiwcRuntime {
       }
     } on SiwcFailure catch (error) {
       throw SiwcFailure('$stage: ${error.message}');
-    } on SocketException {
-      throw SiwcFailure('$stage: 通信に接続できません。ネットワークを確認して再接続してください。');
+    } on SocketException catch (error) {
+      throw SiwcFailure('$stage: ${safeSocketFailure(error)}');
     } on HandshakeException {
       throw SiwcFailure('$stage: 安全な通信を確立できません。証明書検証を省略せず停止しました。');
     } on TimeoutException {

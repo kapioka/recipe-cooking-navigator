@@ -76,8 +76,7 @@ class _PocScreenState extends State<PocScreen> {
 
   Future<void> _login({bool newAccount = false}) => _run(() async {
     setState(
-      () => _message =
-          'ブラウザで接続を確認してください。手続き後は「アプリに戻る」を押すか、Androidの「戻る」操作でここへ戻ってください。',
+      () => _message = 'ネット接続を確認しています。ブラウザが開いたら手続きし、その後「アプリに戻る」を押すか、Androidの「戻る」操作でここへ戻ってください。',
     );
     await widget.runtime.signIn(newAccount: newAccount);
     _models = [];

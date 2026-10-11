@@ -55,12 +55,15 @@ class FakeNetwork implements SiwcNetwork {
   String? refreshScope;
   bool revokeFailure = false;
   bool grant = true;
+  SocketException? discoveryFailure;
+  SocketException? exchangeFailure;
   String subject = 'account';
   Completer<void>? refreshHold;
   Map<String, dynamic>? sent;
   @override
   Future<Map<String, dynamic>> getJson(Uri uri, {String? bearer}) async {
     if (uri.path.endsWith('openid-configuration')) {
+      if (discoveryFailure != null) throw discoveryFailure!;
       return {
         'issuer': issuer,
         'jwks_uri': '$issuer/jwks',
@@ -110,6 +113,7 @@ class FakeNetwork implements SiwcNetwork {
       };
     }
     expect(fields['client_id'], 'issued');
+    if (exchangeFailure != null) throw exchangeFailure!;
     expect(
       fields['redirect_uri'],
       platform.auth!.queryParameters['redirect_uri'],
@@ -145,6 +149,69 @@ class FakeNetwork implements SiwcNetwork {
 }
 
 void main() {
+  test(
+    'native connection failure prevents browser auth and permits safe retry',
+    () async {
+      final platform = FakePlatform();
+      final network = FakeNetwork(platform)
+        ..discoveryFailure = const SocketException(
+          'Failed host lookup: secret-host?code=secret-code',
+          osError: OSError('secret OS detail', 7),
+        );
+      final runtime = SiwcRuntime(platform, network);
+      await runtime.initialize();
+      final before = platform.saved;
+      await expectLater(
+        runtime.signIn(),
+        throwsA(
+          isA<SiwcFailure>().having(
+            (error) => error.message,
+            'safe connection diagnosis',
+            allOf(
+              contains('接続確認'),
+              contains('接続先の名前'),
+              contains('OS 7'),
+              isNot(contains('secret')),
+            ),
+          ),
+        ),
+      );
+      expect(platform.auth, isNull);
+      expect(platform.saved, before);
+      expect(runtime.connected, false);
+      network.discoveryFailure = null;
+      await runtime.signIn();
+      expect(runtime.canInfer, true);
+    },
+  );
+
+  test('exchange socket diagnosis exposes only stage and OS number', () async {
+    final platform = FakePlatform();
+    final network = FakeNetwork(platform)
+      ..exchangeFailure = const SocketException(
+        'secret-token secret-code secret-url',
+        osError: OSError('secret account address', 101),
+      );
+    final runtime = SiwcRuntime(platform, network);
+    await runtime.initialize();
+    await expectLater(
+      runtime.signIn(),
+      throwsA(
+        isA<SiwcFailure>().having(
+          (error) => error.message,
+          'safe exchange diagnosis',
+          allOf(
+            contains('認証コードの交換'),
+            contains('OS 101'),
+            isNot(contains('secret')),
+          ),
+        ),
+      ),
+    );
+    expect(runtime.connected, false);
+    expect((jsonDecode(platform.saved!) as Map)['pending_client_id'], 'issued');
+  });
+
   test('local loopback sign-in, protected persistence, model discovery and text only request', () async {
     final platform = FakePlatform();
     final network = FakeNetwork(platform);
