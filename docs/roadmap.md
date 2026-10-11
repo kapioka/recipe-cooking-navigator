@@ -4,7 +4,7 @@
 
 ## Current-state contract
 
-- Implementation baseline: `edd034ec65468117e5c448a2097eb6a0fb901c79`
+- Implementation baseline: `91b815530d2ad63f102a8129a67305a8eec328a8`
 - Reconciled: 2026-10-11
 - 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
 - このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
@@ -24,7 +24,7 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映対象にはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoCが含まれる。
 
-本体195テスト、PoC13テストと静的解析・debug buildが合格。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWCの実機OAuth/完了推論が成功するまで本体統合へ進めない。外部SNS/バックエンド/iOSは今回追加しない。
+本体195テスト、PoC15テストと静的解析・debug buildが合格。本体の正式署名APKとPoCをPixelへ更新し、本体起動を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWCはcallback後の認証コード交換で通信に失敗し、接続確認と安全な通信診断を追加した。実機OAuth/完了推論が成功するまで本体統合へ進めない。外部SNS/バックエンド/iOSは今回追加しない。
 
 ## Execution notes
 
@@ -42,7 +42,7 @@ Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映�
 
 2026-10-05に作業リストへ反映。既存Phaseの依存順・未検証ゲートは維持し、この項目の公開版番号・公開日は未定とする。詳細設計・Acceptance・Issueの状態はGitHubの個別Issueを正本とする。
 
-- [ ] [#7 Android共有でChatGPTのレシピ生成・改善結果を取り込む](https://github.com/kapioka/recipe-cooking-navigator/issues/7) — 2026-10-11ローカル実装・全195テスト・debug APK build済み。公開Schema整合とユーザー端末QAは未完了。共有/コピー方式を正本とし、詳細は[チェックポイント](plans/issues-7-8-checkpoint.md)、[後日のQA](plans/issue7-device-qa.md)。
+- [ ] [#7 Android共有でChatGPTのレシピ生成・改善結果を取り込む](https://github.com/kapioka/recipe-cooking-navigator/issues/7) — 2026-10-11実装・全195テスト・debug APK build・公開Schema整合・正式署名APKのPixel更新済み。ChatGPTとの往復を含むユーザー端末QAは未完了。共有/コピー方式を正本とし、詳細は[チェックポイント](plans/issues-7-8-checkpoint.md)、[後日のQA](plans/issue7-device-qa.md)。
   - 食材・人数・調理器具・味の方向性・時間を入力し、「ChatGPTでレシピを作る」から依頼する。
   - 公開AI入口 `ai/AGENTS.md` のURL、ユーザー条件、仕様取得失敗時は推測生成しない指示を含む短い依頼文を自動生成する。
   - ChatGPT側が必要な最新Schema / Workflow / 連携仕様を参照する。アプリ側の仕様全文取得・ETag・キャッシュは基本経路に含めない。
