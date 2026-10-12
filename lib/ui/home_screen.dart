@@ -763,6 +763,27 @@ class _RecipeCard extends StatelessWidget {
         trailing: PopupMenuButton<String>(
           tooltip: 'レシピの操作',
           onSelected: (value) async {
+            if (value == 'latest') {
+              final latest = controller.latestRecipeFor(recipe.id);
+              if (latest == null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('最新版レシピが見つかりません。')),
+                  );
+                }
+                return;
+              }
+              final result = await controller.setActiveRevision(
+                recipe.id,
+                latest.revision,
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message)),
+                );
+              }
+              return;
+            }
             if (value != 'archive') return;
             final result = await controller.setArchived(recipe.id, true);
             if (context.mounted) {
@@ -770,8 +791,20 @@ class _RecipeCard extends StatelessWidget {
                   .showSnackBar(SnackBar(content: Text(result)));
             }
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'archive', child: Text('アーカイブへ移す')),
+          itemBuilder: (_) => [
+            PopupMenuItem<String>(
+              key: Key('activate_latest_recipe_${recipe.id}'),
+              value: 'latest',
+              enabled: !controller.isLatestRevision(
+                recipe.id,
+                recipe.revision,
+              ),
+              child: const Text('最新版レシピに変更'),
+            ),
+            const PopupMenuItem<String>(
+              value: 'archive',
+              child: Text('アーカイブへ移す'),
+            ),
           ],
         ),
         onTap: () {
