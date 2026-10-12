@@ -54,7 +54,12 @@ String safeHttpFailure(int status, List<int> bytes) {
   return status == 400
       ? '公開サービスのHTTP 400エラーです。送信形式が受け付けられませんでした。'
             '${hints.isEmpty ? '' : '（送信診断: ${hints.join(' / ')}）'}'
-      : '公開サービスのHTTP $statusエラーです。認証・利用枠・通信を確認してください。';
+      : switch (status) {
+          401 => 'ChatGPTへの接続を確認できません。（HTTP 401）',
+          403 => '作成する権限を確認できません。（HTTP 403）',
+          429 => '現在リクエストを受け付けられません。しばらく待ってから再試行してください。（HTTP 429）',
+          _ => '公開サービスからエラーが返りました。原因を特定できません。（HTTP $status）',
+        };
 }
 
 abstract class SiwcNetwork {
@@ -100,7 +105,15 @@ class HttpSiwcNetwork implements SiwcNetwork {
       if (bytes.length > 1024 * 1024) throw const SiwcFailure('認証応答の上限を超えました。');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw SiwcFailure(safeHttpFailure(response.statusCode, bytes));
+      throw SiwcFailure(
+        safeHttpFailure(response.statusCode, bytes),
+        kind: switch (response.statusCode) {
+          401 => SiwcFailureKind.authentication,
+          403 => SiwcFailureKind.permission,
+          400 || 422 => SiwcFailureKind.request,
+          _ => SiwcFailureKind.unknown,
+        },
+      );
     }
     if (emptyOk && bytes.isEmpty) return {};
     final decoded = jsonDecode(utf8.decode(bytes));

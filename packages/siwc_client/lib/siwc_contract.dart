@@ -12,9 +12,12 @@ const resource = 'https://api.openai.com/v1';
 const scopes =
     'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct';
 
+enum SiwcFailureKind { unknown, authentication, permission, request, network }
+
 class SiwcFailure implements Exception {
-  const SiwcFailure(this.message);
+  const SiwcFailure(this.message, {this.kind = SiwcFailureKind.unknown});
   final String message;
+  final SiwcFailureKind kind;
   @override
   String toString() => message;
 }

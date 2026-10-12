@@ -22,6 +22,8 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 ## Current status
 
+- 2026-10-12 UI/UX改善: 条件からの直接作成、設定分離、作成中止・遅着無視、結果専用表示、保存再試行と保存版詳細、端末内下書き・モデル記憶、ホームと取り込み導線を実装。検証結果と端末QAの残件は [UI/UX実装記録](plans/ui-ux-recipe-creation-implementation-2026-10-12.md)。作業ブランチの変更であり、main公開・配布済みを意味しない。
+
 Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映対象にはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoC、公開SIWCを使った本体のレシピ生成・Revision改善が含まれる。
 
 本体201テスト、共有adapterのPoC23テストと両静的解析、formatter、正式署名buildが合格。本体の署名APKをPixelへデータを保持して更新し、起動・致命的例外なし・回転設定0/0を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWC PoCではOAuth・モデル一覧・完了回答の受信をユーザーが確認。本体生成/Revision改善は正本Schema/Workflowと共通Validator・材料/工程プレビュー・確認保存へ合流し、改善元ID/parent/next_revision、activeと過去Versionを保持する。形式指示をinstructions、希望・選択Feedbackをinputへ分離し、HTTP 400となったtext.format指定は除去した。本文を表示しない形式/HTTP診断を追加し、最新APKでRecipe生成→プレビュー→確認保存の成功をユーザーが確認。承認済みのPR #13 main mergeへ進める。選択Version改善・音声入力・期限更新等の端末QAは未確認。入力欄直下は音声入力と確定送信の2ボタンで、枠内編集の説明を配置した。

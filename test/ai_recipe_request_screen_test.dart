@@ -1,3 +1,5 @@
+import 'package:recipe_cooking_navigator/application/recipe_ai_client.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,6 +13,19 @@ import 'package:recipe_cooking_navigator/domain/recipe_validator.dart';
 import 'package:recipe_cooking_navigator/platform/ai_request_platform.dart';
 import 'package:recipe_cooking_navigator/ui/ai_recipe_request_screen.dart';
 import 'package:recipe_cooking_navigator/ui/home_screen.dart';
+
+class _DisconnectedClient implements RecipeAiClient {
+  @override
+  Future<void> initialize() async {}
+  @override
+  bool get canInfer => false;
+  @override
+  bool get connected => false;
+  @override
+  void cancel() {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _Platform implements AiRequestPlatform {
   final List<String> sent = [];
@@ -69,15 +84,34 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
-          home: AiRecipeRequestScreen(platform: platform, publicReady: true),
+          home: AiRecipeRequestScreen(
+            platform: platform,
+            publicReady: true,
+            client: _DisconnectedClient(),
+          ),
         ),
       );
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('ai_食材')), '米、卵');
       expect(platform.sent, isEmpty);
-      await tester.ensureVisible(find.text('依頼内容を確認'));
-      await tester.tap(find.text('依頼内容を確認'));
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('alternative_methods')),
+        250,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.ensureVisible(find.text('別の方法で作る'));
+      await tester.tap(find.text('別の方法で作る'));
       await tester.pumpAndSettle();
       expect(platform.sent, isEmpty);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.byKey(const Key('copy_ai_request')),
         200,
@@ -93,7 +127,7 @@ void main() {
       expect(clipboard, contains('米、卵'));
       await tester.scrollUntilVisible(
         find.textContaining('コピー済みです'),
-        100,
+        -200,
         scrollable: find
             .descendant(
               of: find.byType(ListView),
@@ -103,7 +137,19 @@ void main() {
       );
       expect(find.textContaining('コピー済みです'), findsOneWidget);
       expect(platform.sent, isEmpty);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('share_ai_request')),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('share_ai_request')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('share_ai_request')));
       await tester.pumpAndSettle();
       expect(platform.sent, hasLength(1));
@@ -125,15 +171,30 @@ void main() {
         MaterialApp(
           home: AiRecipeRequestScreen(
             platform: platform,
+            client: _DisconnectedClient(),
             improvementRequest: request,
           ),
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('alternative_methods')),
+        250,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.ensureVisible(find.text('別の方法で作る'));
+      await tester.tap(find.text('別の方法で作る'));
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('ai_publication_pending')), findsOneWidget);
       await tester.ensureVisible(find.byKey(const Key('share_ai_request')));
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('share_ai_request')))
+            .widget<OutlinedButton>(find.byKey(const Key('share_ai_request')))
             .onPressed,
         isNull,
       );
@@ -157,6 +218,8 @@ void main() {
         MaterialApp(home: HomeScreen(controller: controller)),
       );
       for (final confirm in [false, true]) {
+        await tester.tap(find.byKey(const Key('open_recipe_import')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('paste_recipe')));
         await tester.pumpAndSettle();
         await tester.enterText(
@@ -173,6 +236,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        if (!confirm) {
+          await tester.tap(find.byKey(const Key('discard_recipe_import')));
+          await tester.pumpAndSettle();
+        }
         expect(await store.loadDocuments(), confirm ? hasLength(1) : isEmpty);
       }
     },

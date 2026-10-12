@@ -1,3 +1,6 @@
+import 'recipe_section.dart';
+import 'recipe_theme.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -383,10 +386,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       controller: controller,
       maxLines: lines,
       keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: InputDecoration(labelText: label),
     ),
   );
 
@@ -398,10 +398,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   ) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: InputDecorator(
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: InputDecoration(labelText: label),
       child: DropdownButton<int>(
         key: key,
         value: value,
@@ -435,100 +432,121 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 if (_sessions.isEmpty)
                   const Text('完了した調理記録がありません。調理を完了すると評価できます。')
                 else ...[
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: '評価する調理記録',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: DropdownButton<String>(
-                      key: const Key('feedback_session'),
-                      value: _sessionId,
-                      isExpanded: true,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (final session in _sessions)
-                          DropdownMenuItem(
-                            value: session['session_id'] as String,
-                            child: Text(
-                              'Version ${session['revision']}・'
-                              '${DateTime.parse(session['completed_at'] as String).toLocal().toString().substring(0, 16)}',
+                  RecipeSection(
+                    title: '調理の記録と評価',
+                    icon: Icons.rate_review_outlined,
+                    color: RecipeTheme.sage,
+                    children: [
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: '評価する調理記録',
+                        ),
+                        child: DropdownButton<String>(
+                          key: const Key('feedback_session'),
+                          value: _sessionId,
+                          isExpanded: true,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            for (final session in _sessions)
+                              DropdownMenuItem(
+                                value: session['session_id'] as String,
+                                child: Text(
+                                  'Version ${session['revision']}・'
+                                  '${DateTime.parse(session['completed_at'] as String).toLocal().toString().substring(0, 16)}',
+                                ),
+                              ),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (id) {
+                                  if (id != null) _selectSession(id);
+                                },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _field(
+                        _time,
+                        '実調理時間（分）',
+                        keyboardType: TextInputType.number,
+                      ),
+                      _score(
+                        const Key('feedback_difficulty'),
+                        '実難易度（1〜5）',
+                        _difficulty,
+                        (value) => setState(() => _difficulty = value),
+                      ),
+                      _field(_difficultyComment, '実難易度のメモ'),
+                      _score(
+                        const Key('feedback_overall'),
+                        '総合評価（1〜5）',
+                        _overall,
+                        (value) => setState(() => _overall = value),
+                      ),
+                    ],
+                  ),
+                  RecipeSection(
+                    children: [
+                      Text(
+                        '味の偏り（理想を0とする）',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      for (final entry in _tasteLabels.entries)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: InputDecorator(
+                            decoration: InputDecoration(labelText: entry.value),
+                            child: DropdownButton<int>(
+                              key: Key('taste_${entry.key}'),
+                              value: _taste[entry.key] ?? 9,
+                              isExpanded: true,
+                              itemHeight: null,
+                              underline: const SizedBox.shrink(),
+                              items: const [
+                                DropdownMenuItem(value: 9, child: Text('未評価')),
+                                DropdownMenuItem(
+                                  value: -2,
+                                  child: Text('-2 強く不足'),
+                                ),
+                                DropdownMenuItem(
+                                  value: -1,
+                                  child: Text('-1 少し不足'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 0,
+                                  child: Text('0 ちょうどよい'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 1,
+                                  child: Text('+1 少し強い'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 2,
+                                  child: Text('+2 強すぎる'),
+                                ),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (value) => setState(
+                                      () => _taste[entry.key] = value == 9
+                                          ? null
+                                          : value,
+                                    ),
                             ),
                           ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (id) {
-                              if (id != null) _selectSession(id);
-                            },
-                    ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _field(_time, '実調理時間（分）', keyboardType: TextInputType.number),
-                  _score(
-                    const Key('feedback_difficulty'),
-                    '実難易度（1〜5）',
-                    _difficulty,
-                    (value) => setState(() => _difficulty = value),
-                  ),
-                  _field(_difficultyComment, '実難易度のメモ'),
-                  _score(
-                    const Key('feedback_overall'),
-                    '総合評価（1〜5）',
-                    _overall,
-                    (value) => setState(() => _overall = value),
-                  ),
-                  Text(
-                    '味の偏り（理想を0とする）',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  for (final entry in _tasteLabels.entries)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(entry.value)),
-                          DropdownButton<int>(
-                            key: Key('taste_${entry.key}'),
-                            value: _taste[entry.key] ?? 9,
-                            items: const [
-                              DropdownMenuItem(value: 9, child: Text('未評価')),
-                              DropdownMenuItem(
-                                value: -2,
-                                child: Text('-2 強く不足'),
-                              ),
-                              DropdownMenuItem(
-                                value: -1,
-                                child: Text('-1 少し不足'),
-                              ),
-                              DropdownMenuItem(
-                                value: 0,
-                                child: Text('0 ちょうどよい'),
-                              ),
-                              DropdownMenuItem(
-                                value: 1,
-                                child: Text('+1 少し強い'),
-                              ),
-                              DropdownMenuItem(
-                                value: 2,
-                                child: Text('+2 強すぎる'),
-                              ),
-                            ],
-                            onChanged: _busy
-                                ? null
-                                : (value) => setState(
-                                    () => _taste[entry.key] = value == 9
-                                        ? null
-                                        : value,
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
                   const SizedBox(height: 12),
-                  _field(_issues, '困ったこと（1行に1件）', lines: 3),
-                  _field(_changes, '実際に変更したこと（1行に1件）', lines: 3),
-                  _field(_comment, '一言メモ', lines: 3),
-                  _field(_nextTime, '次回どうしたいか（1行に1件）', lines: 3),
+                  RecipeSection(
+                    title: '今回のメモ',
+                    icon: Icons.edit_note,
+                    children: [
+                      _field(_issues, '困ったこと（1行に1件）', lines: 3),
+                      _field(_changes, '実際に変更したこと（1行に1件）', lines: 3),
+                      _field(_comment, '一言メモ', lines: 3),
+                      _field(_nextTime, '次回どうしたいか（1行に1件）', lines: 3),
+                    ],
+                  ),
                   FilledButton(
                     key: const Key('save_assessment'),
                     onPressed: _busy ? null : _saveAssessment,
@@ -542,65 +560,72 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       label: const Text('好みの記録に残す'),
                     ),
                   const Divider(height: 32),
-                  Text(
-                    'ChatGPTで改善',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: '改善元Version',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: DropdownButton<int>(
-                      key: const Key('feedback_improvement_revision'),
-                      value: _improvementRevision,
-                      isExpanded: true,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (final revision in revisions)
-                          DropdownMenuItem(
-                            value: revision.revision,
-                            child: Text(
-                              'Version ${revision.revision}・${revision.title}',
-                            ),
-                          ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() {
-                              _preferredImprovementRevision = value;
-                              _improvementRevision = value;
-                            }),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _field(
-                    _goal,
-                    '改善してほしいこと',
-                    key: const Key('feedback_goal'),
-                    lines: 3,
-                  ),
-                  SwitchListTile(
-                    title: const Text('良かった部分を維持する'),
-                    value: _preserveSuccessfulParts,
-                    onChanged: _busy
-                        ? null
-                        : (value) =>
-                              setState(() => _preserveSuccessfulParts = value),
-                  ),
-                  _field(_notes, '補足（任意）', lines: 2),
-                  OutlinedButton.icon(
-                    key: const Key('improve_with_chatgpt'),
-                    onPressed: _busy ? null : () => _share(asAiRequest: true),
-                    icon: const Icon(Icons.auto_awesome_outlined),
-                    label: const Text('選択した評価でChatGPTに改善を依頼'),
-                  ),
-                  FilledButton.icon(
-                    key: const Key('share_feedback'),
-                    onPressed: _busy ? null : _share,
-                    icon: const Icon(Icons.share_outlined),
-                    label: const Text('Feedbackを共有'),
+                  RecipeSection(
+                    color: RecipeTheme.sage,
+                    children: [
+                      Text(
+                        'ChatGPTで改善',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: '改善元Version',
+                        ),
+                        child: DropdownButton<int>(
+                          key: const Key('feedback_improvement_revision'),
+                          value: _improvementRevision,
+                          isExpanded: true,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            for (final revision in revisions)
+                              DropdownMenuItem(
+                                value: revision.revision,
+                                child: Text(
+                                  'Version ${revision.revision}・${revision.title}',
+                                ),
+                              ),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (value) => setState(() {
+                                  _preferredImprovementRevision = value;
+                                  _improvementRevision = value;
+                                }),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _field(
+                        _goal,
+                        '改善してほしいこと',
+                        key: const Key('feedback_goal'),
+                        lines: 3,
+                      ),
+                      SwitchListTile(
+                        title: const Text('良かった部分を維持する'),
+                        value: _preserveSuccessfulParts,
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(
+                                () => _preserveSuccessfulParts = value,
+                              ),
+                      ),
+                      _field(_notes, '補足（任意）', lines: 2),
+                      OutlinedButton.icon(
+                        key: const Key('improve_with_chatgpt'),
+                        onPressed: _busy
+                            ? null
+                            : () => _share(asAiRequest: true),
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        label: const Text('選択した評価でChatGPTに改善を依頼'),
+                      ),
+                      FilledButton.icon(
+                        key: const Key('share_feedback'),
+                        onPressed: _busy ? null : _share,
+                        icon: const Icon(Icons.share_outlined),
+                        label: const Text('Feedbackを共有'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                 ],

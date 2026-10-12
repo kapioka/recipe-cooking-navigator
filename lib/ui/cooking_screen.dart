@@ -9,8 +9,7 @@ import '../domain/kitchen_timer.dart';
 import '../domain/recipe_document.dart';
 import '../platform/cooking_device.dart';
 import 'kitchen_scope.dart';
-
-enum _CookingMenuAction { complete, help }
+import 'recipe_theme.dart';
 
 class CookingScreen extends StatefulWidget {
   const CookingScreen({
@@ -52,11 +51,10 @@ class _CookingScreenState extends State<CookingScreen> {
   double dragDistance = 0;
   bool panelOpen = false;
   bool allowPop = false;
-  static const _background = Color(0xFFFFFAF6);
-  static const _rust = Color(0xFFB6401F);
-  static const _rustDark = Color(0xFF96361F);
-  static const _softRust = Color(0xFFF8E9DF);
-  static const _border = Color(0xFFE8CFC0);
+  static const _background = RecipeTheme.cream;
+  static const _accent = RecipeTheme.forest;
+  static const _softAccent = RecipeTheme.sage;
+  static const _border = RecipeTheme.outline;
   List<Map<String, dynamic>> get steps => widget.recipe.steps;
   Map<String, dynamic> get step => steps[index];
   bool get _usesKitchenTimer => widget.kitchenController != null;
@@ -578,12 +576,12 @@ class _CookingScreenState extends State<CookingScreen> {
       itemBuilder: (sheetContext, position) => ListTile(
         minVerticalPadding: 16,
         contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        tileColor: position == index ? _softRust : Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        tileColor: position == index ? _softAccent : Colors.transparent,
         selected: position == index,
         leading: CircleAvatar(
-          backgroundColor: position == index ? _rust : _softRust,
-          foregroundColor: position == index ? Colors.white : _rustDark,
+          backgroundColor: position == index ? _accent : _softAccent,
+          foregroundColor: position == index ? Colors.white : _accent,
           child: Text(
             '${position + 1}',
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -653,7 +651,7 @@ class _CookingScreenState extends State<CookingScreen> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: _softRust,
+            color: _softAccent,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
@@ -692,7 +690,7 @@ class _CookingScreenState extends State<CookingScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.record_voice_over_outlined, color: _rustDark),
+                  Icon(Icons.record_voice_over_outlined, color: _accent),
                   SizedBox(width: 10),
                   Text(
                     '使える言葉',
@@ -747,7 +745,7 @@ class _CookingScreenState extends State<CookingScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: _softRust,
+              color: _softAccent,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
@@ -881,7 +879,7 @@ class _CookingScreenState extends State<CookingScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               decoration: BoxDecoration(
-                color: _softRust,
+                color: _softAccent,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -939,7 +937,7 @@ class _CookingScreenState extends State<CookingScreen> {
               key: const Key('timer_toggle_detail'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(70),
-                backgroundColor: timerIdle ? _rust : _rustDark,
+                backgroundColor: _accent,
                 textStyle: const TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.bold,
@@ -988,9 +986,9 @@ class _CookingScreenState extends State<CookingScreen> {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: _background,
+      color: Colors.white,
       border: Border.all(color: _border),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(24),
     ),
     child: child,
   );
@@ -1009,10 +1007,10 @@ class _CookingScreenState extends State<CookingScreen> {
               width: 40,
               height: 40,
               decoration: const BoxDecoration(
-                color: _softRust,
+                color: _softAccent,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: _rust),
+              child: Icon(icon, color: _accent),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -1039,20 +1037,20 @@ class _CookingScreenState extends State<CookingScreen> {
   }) {
     final style = filled || soft
         ? FilledButton.styleFrom(
-            backgroundColor: soft ? _softRust : _rust,
-            foregroundColor: soft ? const Color(0xFF211813) : Colors.white,
-            disabledBackgroundColor: _softRust,
-            disabledForegroundColor: _rust.withValues(alpha: .45),
+            backgroundColor: soft ? _softAccent : _accent,
+            foregroundColor: soft ? RecipeTheme.ink : Colors.white,
+            disabledBackgroundColor: _softAccent,
+            disabledForegroundColor: _accent.withValues(alpha: .45),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(24),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
           )
         : OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF211813),
-            side: const BorderSide(color: _rust),
+            foregroundColor: RecipeTheme.ink,
+            side: const BorderSide(color: _accent),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(24),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
           );
@@ -1156,12 +1154,12 @@ class _CookingScreenState extends State<CookingScreen> {
           scaffoldBackgroundColor: _background,
           appBarTheme: const AppBarTheme(
             backgroundColor: _background,
-            foregroundColor: Color(0xFF211813),
+            foregroundColor: RecipeTheme.ink,
             surfaceTintColor: Colors.transparent,
           ),
           bottomSheetTheme: const BottomSheetThemeData(
             showDragHandle: true,
-            dragHandleColor: _rustDark,
+            dragHandleColor: _accent,
             dragHandleSize: Size(64, 7),
           ),
         ),
@@ -1179,48 +1177,10 @@ class _CookingScreenState extends State<CookingScreen> {
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             actions: [
-              PopupMenuButton<_CookingMenuAction>(
-                tooltip: 'その他の操作',
-                onSelected: (action) {
-                  switch (action) {
-                    case _CookingMenuAction.complete:
-                      _exit(true);
-                    case _CookingMenuAction.help:
-                      _help();
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: _CookingMenuAction.complete,
-                    height: 72,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.check_circle_outline, size: 30),
-                      title: Text(
-                        '調理を完了',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _CookingMenuAction.help,
-                    height: 72,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.help_outline, size: 30),
-                      title: Text(
-                        '画面操作の説明',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              IconButton(
+                tooltip: '画面操作の説明',
+                onPressed: _help,
+                icon: const Icon(Icons.help_outline),
               ),
             ],
           ),
@@ -1283,18 +1243,19 @@ class _CookingScreenState extends State<CookingScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 12,
+                                runSpacing: 8,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      '工程 ${index + 1} / ${steps.length}',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                  Text(
+                                    '工程 ${index + 1} / ${steps.length}',
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
                                   Semantics(
                                     liveRegion: true,
                                     label: '音声操作状態、$voiceState',
@@ -1303,9 +1264,9 @@ class _CookingScreenState extends State<CookingScreen> {
                                       key: const Key('voice_state'),
                                       style: OutlinedButton.styleFrom(
                                         minimumSize: const Size(0, 56),
-                                        backgroundColor: _softRust,
-                                        foregroundColor: _rustDark,
-                                        side: const BorderSide(color: _rust),
+                                        backgroundColor: _softAccent,
+                                        foregroundColor: _accent,
+                                        side: const BorderSide(color: _accent),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 14,
                                           vertical: 10,
@@ -1335,7 +1296,7 @@ class _CookingScreenState extends State<CookingScreen> {
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
-                                  color: _rustDark,
+                                  color: _accent,
                                 ),
                               ),
                               if (_timerVisible) ...[
@@ -1348,7 +1309,7 @@ class _CookingScreenState extends State<CookingScreen> {
                                     style: TextStyle(
                                       color: _timerHasFinished
                                           ? Theme.of(context).colorScheme.error
-                                          : _rustDark,
+                                          : _accent,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1362,7 +1323,7 @@ class _CookingScreenState extends State<CookingScreen> {
                                   fontSize: 32,
                                   height: 1.25,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF211813),
+                                  color: RecipeTheme.ink,
                                 ),
                               ),
                               const SizedBox(height: 18),
@@ -1376,7 +1337,7 @@ class _CookingScreenState extends State<CookingScreen> {
                                 style: const TextStyle(
                                   fontSize: 22,
                                   height: 1.55,
-                                  color: Color(0xFF211813),
+                                  color: RecipeTheme.ink,
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -1387,7 +1348,7 @@ class _CookingScreenState extends State<CookingScreen> {
                                     const Text(
                                       'この工程の材料・分量',
                                       style: TextStyle(
-                                        color: _rustDark,
+                                        color: _accent,
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1435,7 +1396,7 @@ class _CookingScreenState extends State<CookingScreen> {
                                     const Text(
                                       '完了判断',
                                       style: TextStyle(
-                                        color: _rustDark,
+                                        color: _accent,
                                         fontSize: 19,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1486,7 +1447,7 @@ class _CookingScreenState extends State<CookingScreen> {
             top: false,
             child: DecoratedBox(
               decoration: const BoxDecoration(
-                color: _background,
+                color: Colors.white,
                 border: Border(top: BorderSide(color: _border)),
                 boxShadow: [
                   BoxShadow(
@@ -1569,24 +1530,34 @@ class _CookingScreenState extends State<CookingScreen> {
                             filled: true,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _controlButton(
-                            key: const Key('screen_controls_button'),
-                            label: '操作方法',
-                            icon: Icons.touch_app_outlined,
-                            onPressed: _help,
-                            soft: true,
+                        if (index < steps.length - 1) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _controlButton(
+                              key: const Key('screen_controls_button'),
+                              label: '操作方法',
+                              icon: Icons.touch_app_outlined,
+                              onPressed: _help,
+                              soft: true,
+                            ),
                           ),
-                        ),
+                        ],
                         const SizedBox(width: 10),
                         Expanded(
                           child: _controlButton(
-                            key: const Key('next_step_button'),
-                            label: '次へ',
-                            icon: Icons.arrow_forward,
-                            onPressed: busy || index == steps.length - 1
+                            key: Key(
+                              index == steps.length - 1
+                                  ? 'complete_cooking'
+                                  : 'next_step_button',
+                            ),
+                            label: index == steps.length - 1 ? '調理完了' : '次へ',
+                            icon: index == steps.length - 1
+                                ? Icons.check_circle_outline
+                                : Icons.arrow_forward,
+                            onPressed: busy
                                 ? null
+                                : index == steps.length - 1
+                                ? () => _exit(true)
                                 : () => _move(index + 1),
                             filled: true,
                           ),

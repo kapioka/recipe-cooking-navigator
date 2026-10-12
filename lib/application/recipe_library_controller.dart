@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:collection/collection.dart';
 
 import '../data/cooking_store.dart';
 import '../data/recipe_archive_store.dart';
@@ -8,6 +10,7 @@ import '../data/preparation_checklist_store.dart';
 import '../data/recipe_document_store.dart';
 import '../data/recipe_inbox_state_store.dart';
 import '../data/recipe_tag_store.dart';
+import '../data/recipe_photo_store.dart';
 import '../data/recipe_version_state_store.dart';
 import '../domain/recipe_document.dart';
 import '../domain/recipe_inbox.dart';
@@ -24,6 +27,18 @@ class RecipeImportPreview {
   const RecipeImportPreview._(this._document);
 
   final RecipeDocument _document;
+  String get source => jsonEncode(_document.raw);
+  List<String> get notices => [
+    _document.servingAdjustmentNote,
+    for (final key in ['storage_note', 'lunchbox_note'])
+      if (_document.recipeData[key] is List)
+        _document
+            .renderText(
+              _document.recipeData[key] as List,
+              _document.contextFor(servings),
+            )
+            .displayText,
+  ];
 
   String get title => _document.title;
   String get recipeId => _document.id;
@@ -40,6 +55,7 @@ class RecipeImportPreview {
   List<String> get stepDetails => [
     for (final step in _document.steps)
       '${step['title']}: ${_document.renderText(step['instruction'] as List, _document.contextFor(servings)).displayText}'
+          '${step['heat'] is List ? '\n火加減: ${_document.renderText(step['heat'] as List, _document.contextFor(servings)).displayText}' : ''}'
           '${step['done_when'] is List ? '\n完了の目安: ${_document.renderText(step['done_when'] as List, _document.contextFor(servings)).displayText}' : ''}',
   ];
 }
@@ -151,6 +167,7 @@ class RecipeLibraryController extends ChangeNotifier {
     RecipeInboxStateStore? recipeInboxStateStore,
     RecipeVersionStateStore? recipeVersionStateStore,
     RecipeArchiveStore? archiveStore,
+    RecipePhotoStore? photoStore,
     this.legacyDataPresent = false,
   }) : assert(
          (recipeInboxPlatform == null) == (recipeInboxStateStore == null),
@@ -162,7 +179,8 @@ class RecipeLibraryController extends ChangeNotifier {
        _recipeInboxStateStore = recipeInboxStateStore,
        _recipeVersionStateStore =
            recipeVersionStateStore ?? MemoryRecipeVersionStateStore(),
-       _archiveStore = archiveStore ?? RecipeArchiveStore();
+       _archiveStore = archiveStore ?? RecipeArchiveStore(),
+       _photoStore = photoStore ?? MemoryRecipePhotoStore();
 
   final CookingStore cookingStore;
   final PreparationChecklistStore preparationStore;
@@ -214,6 +232,39 @@ class RecipeLibraryController extends ChangeNotifier {
   final RecipeInboxStateStore? _recipeInboxStateStore;
   final RecipeVersionStateStore _recipeVersionStateStore;
   final RecipeArchiveStore _archiveStore;
+  final RecipePhotoStore _photoStore;
+  final _photos = <String, Uint8List>{};
+  final _photoErrors = <String, String>{};
+  final _photoWrites = <String>{};
+
+  Uint8List? photoFor(String recipeId) => _photos[recipeId];
+  String? photoErrorFor(String recipeId) => _photoErrors[recipeId];
+  bool isSavingPhoto(String recipeId) => _photoWrites.contains(recipeId);
+
+  Future<String?> setRecipePhoto(String recipeId, Uint8List? png) async {
+    if (!_photoWrites.add(recipeId)) return '写真を保存しています。';
+    notifyListeners();
+    try {
+      return await _synchronizeLibraryMutation(() async {
+        if (latestRecipeFor(recipeId) == null) return 'レシピが見つかりません。';
+        try {
+          await _photoStore.save(recipeId, png);
+          if (png == null) {
+            _photos.remove(recipeId);
+          } else {
+            _photos[recipeId] = Uint8List.fromList(png).asUnmodifiableView();
+          }
+          _photoErrors.remove(recipeId);
+          return null;
+        } catch (_) {
+          return '写真を保存できませんでした。元の写真は変更していません。';
+        }
+      });
+    } finally {
+      _photoWrites.remove(recipeId);
+      notifyListeners();
+    }
+  }
 
   List<RecipeDocument> _documents = const [];
   List<RecipeDocument> _latestRecipes = const [];
@@ -245,6 +296,13 @@ class RecipeLibraryController extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   List<RecipeSearchSuggestion> get searchSuggestions => _searchSuggestions;
   bool get isImporting => _isImporting;
+  bool _creationOpen = false;
+  bool get creationOpen => _creationOpen;
+  void setCreationOpen(bool value) {
+    _creationOpen = value;
+    notifyListeners();
+  }
+
   bool get isCheckingInbox => _isCheckingInbox;
   bool get isSelectingInboxFolder => _isSelectingInboxFolder;
   bool get isInboxBusy => _isCheckingInbox || _isSelectingInboxFolder;
@@ -341,6 +399,16 @@ class RecipeLibraryController extends ChangeNotifier {
         _loadError ??= 'Inboxの接続情報を読み込めませんでした。';
       }
     }
+    _photos.clear();
+    _photoErrors.clear();
+    for (final id in _documents.map((doc) => doc.id).toSet()) {
+      try {
+        final photo = await _photoStore.read(id);
+        if (photo != null) _photos[id] = photo.asUnmodifiableView();
+      } catch (_) {
+        _photoErrors[id] = '写真を読み込めません。タップして変更または削除できます。';
+      }
+    }
     notifyListeners();
   }
 
@@ -396,11 +464,50 @@ class RecipeLibraryController extends ChangeNotifier {
     }
   }
 
-  Future<RecipeImportPreparation> prepareImportSource(String source) async {
+  Future<RecipeImportPreparation> prepareImportSource(
+    String source, {
+    RecipeImportPreview? replacing,
+    bool Function(RecipeImportPreview)? accepts,
+  }) async {
+    // Validate before replacing the single owned slot. Failed regeneration must
+    // leave the previous candidate intact.
+    if (replacing != null && identical(replacing, _pendingFileImport)) {
+      try {
+        final preview = RecipeImportPreview._(
+          _validator.validateSource(source),
+        );
+        if (accepts != null && !accepts(preview)) {
+          return const RecipeImportPreparation(
+            status: RecipeImportPreparationStatus.failed,
+            message: '生成したレシピのID・版・改善元が依頼と一致しません。保存していません。',
+          );
+        }
+        _pendingFileImport = preview;
+        return RecipeImportPreparation(
+          status: RecipeImportPreparationStatus.ready,
+          message: '内容を確認してください。',
+          preview: preview,
+        );
+      } on RecipeImportException catch (error) {
+        return RecipeImportPreparation(
+          status: RecipeImportPreparationStatus.failed,
+          message: error.message,
+          errorCode: error.code,
+        );
+      }
+    }
     final busy = _beginPreparedImport();
     if (busy != null) return busy;
     try {
-      return _prepareImportSource(source);
+      final prepared = _prepareImportSource(source);
+      if (accepts != null && !accepts(prepared.preview!)) {
+        _finishPreparedImport();
+        return const RecipeImportPreparation(
+          status: RecipeImportPreparationStatus.failed,
+          message: '生成したレシピのID・版・改善元が依頼と一致しません。保存していません。',
+        );
+      }
+      return prepared;
     } on RecipeImportException catch (error) {
       _finishPreparedImport();
       return RecipeImportPreparation(
@@ -415,6 +522,18 @@ class RecipeLibraryController extends ChangeNotifier {
         message: '共有されたレシピを読み込めませんでした。',
       );
     }
+  }
+
+  /// Revalidate the retained immutable candidate after a failed save. A different
+  /// owner's pending import cannot be replaced by retry.
+  Future<RecipeImportPreparation> reprepareImport(
+    RecipeImportPreview preview,
+  ) => prepareImportSource(preview.source, replacing: preview);
+
+  bool isStoredPreview(RecipeImportPreview preview) {
+    final saved = revisionFor(preview.recipeId, preview.revision);
+    return saved != null &&
+        const DeepCollectionEquality().equals(saved.raw, preview._document.raw);
   }
 
   RecipeImportPreparation? _beginPreparedImport() {
@@ -773,7 +892,9 @@ class RecipeLibraryController extends ChangeNotifier {
       });
     }
     final storeResult = await _store.saveDocument(document.raw);
-    if (storeResult == StoreRecipeResult.added) {
+    if (storeResult == StoreRecipeResult.added ||
+        (storeResult == StoreRecipeResult.alreadyExists &&
+            revisionFor(document.id, document.revision) == null)) {
       _documents = [..._documents, document];
       _rebuildLatestRecipes();
       notifyListeners();
@@ -978,6 +1099,7 @@ class RecipeLibraryController extends ChangeNotifier {
           await cookingStore.deleteRecipe(recipeId);
           await preparationStore.deleteRecipe(recipeId);
           await _tagStore.saveTags(recipeId, const []);
+          await _photoStore.save(recipeId, null);
           await (versionStore as RecipeVersionStateDeletionStore).deleteRecipe(
             recipeId,
           );
@@ -988,6 +1110,8 @@ class RecipeLibraryController extends ChangeNotifier {
           _activeRevisionsByRecipeId = {..._activeRevisionsByRecipeId}
             ..remove(recipeId);
           _tagsByRecipeId = {..._tagsByRecipeId}..remove(recipeId);
+          _photos.remove(recipeId);
+          _photoErrors.remove(recipeId);
           _rebuildLatestRecipes();
           notifyListeners();
         } catch (_) {

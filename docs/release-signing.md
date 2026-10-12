@@ -73,9 +73,9 @@ Pixel 10aには専用鍵で署名したAPKが入っています。更新時は�
 
 - Apache License 2.0、NOTICEの帰属表示、食品安全上の注意が配布物から確認できること
 - keystoreと復旧情報のバックアップ
-- PRのmerge commitとAPK生成元commit
-- `v0.1.0` tag、APK version `0.1.0`、versionCode `1`
+- 公開対象commitとAPK生成元commitの一致。mainへのmergeは別途明示承認を受ける
+- tag、APK versionName、`pubspec.yaml`のversionの一致と、前回より大きいversionCode
 - APKと`SHA256SUMS.txt`
 - Release notes、対応範囲、未実装範囲、インストール手順
 
-公開作業の進捗と証拠は[GitHub Issue #3](https://github.com/kapioka/recipe-cooking-navigator/issues/3)へ記録します。
+版ごとの更新内容は`docs/releases/`、配布APKのchecksum・署名・生成元commitはGitHub Releaseへ記録します。初回公開の記録は[GitHub Issue #3](https://github.com/kapioka/recipe-cooking-navigator/issues/3)を参照してください。

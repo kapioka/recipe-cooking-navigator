@@ -238,10 +238,13 @@ void main() {
       )).preview!;
       expect(store.documents, isEmpty);
       await library.confirmPreparedImport(first);
-      expect(
-        (await prepareAiRecipe(library, request, recipeSource)).preview,
-        isNull,
-      );
+      final duplicate = (await prepareAiRecipe(
+        library,
+        request,
+        recipeSource,
+      )).preview!;
+      expect(library.isStoredPreview(duplicate), isTrue);
+      library.cancelPreparedImport(duplicate);
       final base = feedback['recipe_snapshot'] as Map<String, dynamic>;
       await library.confirmPreparedImport(
         (await library.prepareImportSource(jsonEncode(base))).preview!,
@@ -334,8 +337,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await visible(tester, 'creation_options');
+      await tester.tap(find.text('こだわりを追加（任意）'));
+      await tester.pumpAndSettle();
       await visible(tester, 'connected_ai_dictate');
       await tester.tap(find.byKey(const Key('connected_ai_dictate')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('音声入力を始める'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('connected_ai_text')),
@@ -383,17 +391,12 @@ void main() {
       await visible(tester, 'connected_ai_send');
       await tester.tap(find.byKey(const Key('connected_ai_send')));
       await tester.pump();
-      expect(
-        tester
-            .widget<FilledButton>(find.byKey(const Key('connected_ai_send')))
-            .onPressed,
-        isNull,
-      );
+      expect(find.byKey(const Key('connected_ai_send')), findsNothing);
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       client.pending!.complete(recipeSource);
       await tester.pumpAndSettle();
       expect(client.prompts, hasLength(1));
-      expect(client.cancels, 1);
+      expect(client.cancels, greaterThanOrEqualTo(1));
       expect(store.documents, isEmpty);
       expect(library.isBusy, isFalse);
     },

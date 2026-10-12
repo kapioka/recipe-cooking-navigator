@@ -13,6 +13,7 @@ import 'package:recipe_cooking_navigator/data/profile_history_writer.dart';
 import 'package:recipe_cooking_navigator/platform/feedback_archive_platform.dart';
 import 'package:recipe_cooking_navigator/ui/preference_record_dialog.dart';
 import 'package:recipe_cooking_navigator/ui/preference_screen.dart';
+import 'package:recipe_cooking_navigator/ui/recipe_theme.dart';
 
 void main() {
   late Directory directory;
@@ -230,6 +231,50 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('grouped preferences and registration fit narrow enlarged text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final revision = controller.snapshot!.profile!.revision;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RecipeTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: PreferenceScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(
+      find.byKey(const Key('register_explicit_preference')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('register_explicit_preference')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(
+      find.byKey(const Key('explicit_preference_declaration')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('explicit_preference_declaration')),
+      '普段は塩味を控えめにしたい',
+    );
+    await tester.tap(find.text('戻る'));
+    await tester.pumpAndSettle();
+    expect(controller.snapshot!.profile!.revision, revision);
+    await tester.ensureVisible(find.text('登録する').first);
+    await tester.pumpAndSettle();
+    expect(find.text('登録する').first.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 // File transactions are exercised in preference_store_test. These widget tests

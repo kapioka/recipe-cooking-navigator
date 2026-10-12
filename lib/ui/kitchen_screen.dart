@@ -11,6 +11,8 @@ import '../data/kitchen_timer_file_store.dart';
 import '../platform/kitchen_device.dart';
 import 'home_screen.dart';
 import 'kitchen_scope.dart';
+import 'recipe_theme.dart';
+import 'recipe_section.dart';
 
 enum _KitchenExitChoice { back, stop, continueTimers }
 
@@ -49,8 +51,8 @@ class _KitchenScreenState extends State<KitchenScreen>
   String? _notificationWarning;
   String? _notificationTargetId;
   String? _selectedTimerId;
-  static const _background = Color(0xFFFFFAF6);
-  static const _rust = Color(0xFFB6401F);
+  static const _background = RecipeTheme.cream;
+  static const _accent = RecipeTheme.forest;
 
   @override
   void initState() {
@@ -574,7 +576,7 @@ class _KitchenScreenState extends State<KitchenScreen>
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
               ),
-              Text('現在 $clock', style: TextStyle(color: _rust)),
+              Text('現在 $clock', style: TextStyle(color: _accent)),
             ],
           ),
           const SizedBox(height: 8),
@@ -582,9 +584,9 @@ class _KitchenScreenState extends State<KitchenScreen>
             key: const Key('main_kitchen_timer'),
             padding: EdgeInsets.all(compact ? 12 : 20),
             decoration: BoxDecoration(
-              color: const Color(0xFFF2E9E1),
+              color: RecipeTheme.sage,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFD9C8BA)),
+              border: Border.all(color: RecipeTheme.outline),
             ),
             child: Column(
               children: [
@@ -607,7 +609,7 @@ class _KitchenScreenState extends State<KitchenScreen>
                         fontSize: compact ? 70 : 96,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -3,
-                        color: const Color(0xFF252320),
+                        color: RecipeTheme.ink,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -836,54 +838,52 @@ class _KitchenScreenState extends State<KitchenScreen>
     };
   }
 
-  Widget _timerRow(KitchenTimer timer) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          timer.name,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+  Widget _timerRow(KitchenTimer timer) => RecipeSection(
+    children: [
+      Text(
+        timer.name,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+      ),
+      Text(
+        _status(timer),
+        style: TextStyle(
+          fontSize: 26,
+          color: timer.state == KitchenTimerState.finished
+              ? RecipeTheme.warning
+              : null,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
-        Text(
-          _status(timer),
-          style: TextStyle(
-            fontSize: 26,
-            color: timer.state == KitchenTimerState.finished ? _rust : null,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-        Wrap(
-          spacing: 8,
-          children: [
-            if (timer.state == KitchenTimerState.running)
-              _action('一時停止', (k) => k.pause(timer.id)),
-            if (timer.state == KitchenTimerState.paused)
-              _action('再開', (k) => k.resume(timer.id)),
-            if (timer.state == KitchenTimerState.ready)
-              _action('開始', (k) => k.start(timer.id)),
-            if (timer.state == KitchenTimerState.running ||
-                timer.state == KitchenTimerState.paused) ...[
-              _action(
-                '+1分',
-                (k) => k.extend(timer.id, const Duration(minutes: 1)),
-              ),
-              _action('停止', (k) => k.cancel(timer.id)),
-            ],
-            if (timer.state == KitchenTimerState.finished &&
-                !timer.isFinishedAcknowledged)
-              _action('終了を確認', (k) => k.acknowledge(timer.id)),
-            if (timer.state != KitchenTimerState.ready)
-              _action('リセット', (k) => k.reset(timer.id)),
-            if (timer.state == KitchenTimerState.ready ||
-                timer.state == KitchenTimerState.cancelled ||
-                (timer.state == KitchenTimerState.finished &&
-                    timer.isFinishedAcknowledged))
-              _action('閉じる', (k) => k.remove(timer.id)),
+      ),
+      Wrap(
+        spacing: 8,
+        children: [
+          if (timer.state == KitchenTimerState.running)
+            _action('一時停止', (k) => k.pause(timer.id)),
+          if (timer.state == KitchenTimerState.paused)
+            _action('再開', (k) => k.resume(timer.id)),
+          if (timer.state == KitchenTimerState.ready)
+            _action('開始', (k) => k.start(timer.id)),
+          if (timer.state == KitchenTimerState.running ||
+              timer.state == KitchenTimerState.paused) ...[
+            _action(
+              '+1分',
+              (k) => k.extend(timer.id, const Duration(minutes: 1)),
+            ),
+            _action('停止', (k) => k.cancel(timer.id)),
           ],
-        ),
-      ],
-    ),
+          if (timer.state == KitchenTimerState.finished &&
+              !timer.isFinishedAcknowledged)
+            _action('終了を確認', (k) => k.acknowledge(timer.id)),
+          if (timer.state != KitchenTimerState.ready)
+            _action('リセット', (k) => k.reset(timer.id)),
+          if (timer.state == KitchenTimerState.ready ||
+              timer.state == KitchenTimerState.cancelled ||
+              (timer.state == KitchenTimerState.finished &&
+                  timer.isFinishedAcknowledged))
+            _action('閉じる', (k) => k.remove(timer.id)),
+        ],
+      ),
+    ],
   );
 
   Widget _action(String label, void Function(KitchenController) action) =>
@@ -903,12 +903,16 @@ class _KitchenStart extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(24),
     children: [
-      const Text('時計とタイマーを、調理のおともに。', style: TextStyle(fontSize: 22)),
-      const SizedBox(height: 16),
-      FilledButton.icon(
-        onPressed: onOpenRecipes,
-        icon: const Icon(Icons.menu_book_outlined),
-        label: const Text('レシピを開く'),
+      RecipeSection(
+        children: [
+          const Text('時計とタイマーを、調理のおともに。', style: TextStyle(fontSize: 22)),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onOpenRecipes,
+            icon: const Icon(Icons.menu_book_outlined),
+            label: const Text('レシピを開く'),
+          ),
+        ],
       ),
       const SizedBox(height: 16),
       const Text(
@@ -947,38 +951,48 @@ class _TimerEditorState extends State<_TimerEditor> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
-              controller: _name,
-              maxLength: 60,
-              decoration: const InputDecoration(labelText: '名前'),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? '名前を入力してください' : null,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextFormField(
+                controller: _name,
+                maxLength: 60,
+                decoration: const InputDecoration(labelText: '名前'),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? '名前を入力してください'
+                    : null,
+              ),
             ),
-            TextFormField(
-              controller: _minutes,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '分'),
-              validator: (value) {
-                final minutes = int.tryParse(value ?? '');
-                return minutes == null || minutes < 0 || minutes > 1439
-                    ? '0〜1439分で入力してください'
-                    : null;
-              },
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextFormField(
+                controller: _minutes,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '分'),
+                validator: (value) {
+                  final minutes = int.tryParse(value ?? '');
+                  return minutes == null || minutes < 0 || minutes > 1439
+                      ? '0〜1439分で入力してください'
+                      : null;
+                },
+              ),
             ),
-            TextFormField(
-              controller: _seconds,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '秒'),
-              validator: (value) {
-                final seconds = int.tryParse(value ?? '');
-                if (seconds == null || seconds < 0 || seconds > 59) {
-                  return '0〜59秒で入力してください';
-                }
-                if ((int.tryParse(_minutes.text) ?? 0) == 0 && seconds == 0) {
-                  return '1秒以上にしてください';
-                }
-                return null;
-              },
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextFormField(
+                controller: _seconds,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '秒'),
+                validator: (value) {
+                  final seconds = int.tryParse(value ?? '');
+                  if (seconds == null || seconds < 0 || seconds > 59) {
+                    return '0〜59秒で入力してください';
+                  }
+                  if ((int.tryParse(_minutes.text) ?? 0) == 0 && seconds == 0) {
+                    return '1秒以上にしてください';
+                  }
+                  return null;
+                },
+              ),
             ),
           ],
         ),

@@ -11,7 +11,12 @@ const publicAiRouterUrl =
 const publicAiPendingMessage = '公開AI入口と対応レシピ形式の準備待ちです。現在は既存の取り込みを利用できます。';
 
 class AiRecipeRequest {
-  const AiRecipeRequest._(this.text, this.directText, [this.feedback]);
+  const AiRecipeRequest._(
+    this.text,
+    this.directText, [
+    this.feedback,
+    this.conditions,
+  ]);
 
   factory AiRecipeRequest.generate({
     required String ingredients,
@@ -43,6 +48,8 @@ class AiRecipeRequest {
       '食材: ${conditions['ingredients']}\n人数: $servings\n'
           '調理時間: $timeMinutes分\n器具: ${conditions['utensils']}\n'
           '味の方向性: ${conditions['taste']}\n希望: ${conditions['instructions']}',
+      null,
+      conditions,
     );
   }
 
@@ -64,6 +71,7 @@ class AiRecipeRequest {
   final String text;
   final String directText;
   final Map<String, dynamic>? feedback;
+  final Map<String, dynamic>? conditions;
 
   static String _header(String task) =>
       'Recipe Cooking Navigator: $task\n'

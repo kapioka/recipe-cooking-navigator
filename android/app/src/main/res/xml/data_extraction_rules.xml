@@ -1,10 +1,16 @@
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="file" path="recipe-photos-v1/" />
+        <exclude domain="file" path="recipe-creation-v1.json" />
+        <exclude domain="file" path="recipe-creation-v1.json.tmp" />
         <exclude domain="file" path="siwc.encrypted" />
         <exclude domain="file" path="siwc.encrypted.bak" />
         <exclude domain="file" path="siwc.encrypted.new" />
     </cloud-backup>
     <device-transfer>
+        <exclude domain="file" path="recipe-photos-v1/" />
+        <exclude domain="file" path="recipe-creation-v1.json" />
+        <exclude domain="file" path="recipe-creation-v1.json.tmp" />
         <exclude domain="file" path="siwc.encrypted" />
         <exclude domain="file" path="siwc.encrypted.bak" />
         <exclude domain="file" path="siwc.encrypted.new" />
