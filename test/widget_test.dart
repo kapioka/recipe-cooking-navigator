@@ -152,6 +152,50 @@ void main() {
     expect(controller.archivedRecipes, hasLength(1));
   });
 
+  testWidgets('switches to the saved latest recipe from the home menu', (
+    tester,
+  ) async {
+    final revisionOne = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final revisionTwo = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final recipeTwo = revisionTwo['recipe'] as Map<String, dynamic>;
+    recipeTwo['revision'] = 2;
+    recipeTwo['parent_revision'] = 1;
+    recipeTwo['title'] = '豚の生姜焼き 改良版';
+
+    final versionStore = MemoryRecipeVersionStateStore({recipeId: 1});
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne, revisionTwo]),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => null,
+      recipeVersionStateStore: versionStore,
+    );
+    await controller.load();
+    await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+
+    final latestAction = find.byKey(Key('activate_latest_recipe_$recipeId'));
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
+    await tester.tap(find.byTooltip('レシピの操作'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PopupMenuItem<String>>(latestAction).enabled, isTrue);
+    await tester.tap(latestAction);
+    await tester.pumpAndSettle();
+
+    expect(controller.activeRecipeFor(recipeId)?.revision, 2);
+    expect(controller.revisionsFor(recipeId), hasLength(2));
+    expect(await versionStore.loadActiveRevisions(), {recipeId: 2});
+    expect(find.text('豚の生姜焼き 改良版'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('レシピの操作'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PopupMenuItem<String>>(latestAction).enabled, isFalse);
+    await tester.tap(find.text('アーカイブへ移す'));
+    await tester.pumpAndSettle();
+    expect(controller.archivedRecipes, hasLength(1));
+  });
+
   testWidgets('shared recipe uses the same validation and confirmation', (
     tester,
   ) async {
