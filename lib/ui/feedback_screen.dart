@@ -611,7 +611,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                               ),
                       ),
                       _field(_notes, '補足（任意）', lines: 2),
-                      OutlinedButton.icon(
+                      FilledButton.icon(
                         key: const Key('improve_with_chatgpt'),
                         onPressed: _busy
                             ? null
@@ -619,7 +619,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         icon: const Icon(Icons.auto_awesome_outlined),
                         label: const Text('選択した評価でChatGPTに改善を依頼'),
                       ),
-                      FilledButton.icon(
+                      OutlinedButton.icon(
                         key: const Key('share_feedback'),
                         onPressed: _busy ? null : _share,
                         icon: const Icon(Icons.share_outlined),
