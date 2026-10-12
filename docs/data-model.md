@@ -378,6 +378,10 @@ RecipeLocalMetadata
 
 検索インデックスを将来追加する場合も、正本はRecipe Revisionと`RecipeLocalMetadata`に置き、インデックスを正本データとして扱わない。
 
+### 任意のRecipe写真
+
+写真はRecipe原本に含めず、Recipe IDをキーにするローカルメタデータとして扱う。各Revisionで共通の1枚とし、active / latestの切替では写真を切り替えない。`recipe-photos-v1/<SHA256(Recipe ID)>.png` に512×512の丸いPNGを保存し、元写真のURI・ファイル名・撮影情報は保持しない。取消・保存失敗では現在の写真を維持し、写真だけを明示変更・削除できる。アーカイブでは保持、Recipe完全削除で削除する。Recipe / Feedback JSON、Drive同期、Android自動バックアップ・端末移行の対象外とする。
+
 ## 26. Google Drive Recipe Inbox local state
 
 Google Drive Recipe Inboxの接続状態と取込記録は、Recipe / Feedback Schemaへ追加せず、Android固有adapterの端末内データとして管理する。初期構築ではスプレッドシートやSQLデータベースを使わず、既存の端末内JSON保存方針に合わせる。

@@ -24,6 +24,10 @@ import 'package:recipe_cooking_navigator/ui/cooking_entry.dart';
 import 'package:recipe_cooking_navigator/ui/cooking_screen.dart';
 import 'package:recipe_cooking_navigator/ui/feedback_screen.dart';
 import 'package:recipe_cooking_navigator/ui/kitchen_scope.dart';
+import 'package:recipe_cooking_navigator/ui/recipe_detail_screen.dart';
+import 'package:recipe_cooking_navigator/ui/recipe_version_history_screen.dart';
+import 'package:recipe_cooking_navigator/ui/recipe_theme.dart';
+import 'package:recipe_cooking_navigator/ui/home_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,10 +73,12 @@ void main() {
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
 
     expect(find.text('まだレシピがありません'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('open_recipe_import')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('import_recipe_button')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('このレシピを取り込みますか？'), findsOneWidget);
+    expect(find.text('レシピの内容確認'), findsOneWidget);
     expect(
       find.byKey(const Key('recipe_import_preview_title')),
       findsOneWidget,
@@ -81,10 +87,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('豚の生姜焼き'), findsOneWidget);
-    expect(find.textContaining('2人分'), findsOneWidget);
-
-    await tester.tap(find.text('豚の生姜焼き'));
-    await tester.pumpAndSettle();
+    expect(find.textContaining('2人分'), findsWidgets);
 
     expect(find.text('レシピ詳細'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('豚こま切れ肉'), 300);
@@ -109,13 +112,7 @@ void main() {
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
     expect(find.text('豚の生姜焼き'), findsOneWidget);
     expect(find.text('キッチンツールを開く'), findsOneWidget);
-    expect(find.text('アーカイブ'), findsOneWidget);
-    expect(
-      tester.widget<OutlinedButton>(
-        find.byKey(const Key('open_recipe_archive')),
-      ),
-      isA<OutlinedButton>(),
-    );
+    expect(find.text('表示: 保存中 ▾'), findsOneWidget);
 
     await tester.tap(find.byTooltip('レシピの操作'));
     await tester.pumpAndSettle();
@@ -125,6 +122,8 @@ void main() {
     expect(controller.archivedRecipes, hasLength(1));
 
     await tester.tap(find.byKey(const Key('open_recipe_archive')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('アーカイブ'));
     await tester.pumpAndSettle();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
     await tester.tap(find.byTooltip('アーカイブの操作'));
@@ -142,6 +141,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open_recipe_archive')));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('アーカイブ'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('アーカイブの操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('完全削除'));
@@ -151,6 +152,102 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.archivedRecipes, hasLength(1));
   });
+
+  testWidgets('switches to the saved latest recipe from the home menu', (
+    tester,
+  ) async {
+    final revisionOne = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final revisionTwo = jsonDecode(recipeSource) as Map<String, dynamic>;
+    final recipeId =
+        (revisionOne['recipe'] as Map<String, dynamic>)['id'] as String;
+    final recipeTwo = revisionTwo['recipe'] as Map<String, dynamic>;
+    recipeTwo['revision'] = 2;
+    recipeTwo['parent_revision'] = 1;
+    recipeTwo['title'] = '豚の生姜焼き 改良版';
+
+    final versionStore = _QuickSwitchVersionStore({recipeId: 1});
+    final cookingStore = CookingStore();
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([revisionOne, revisionTwo]),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => null,
+      recipeVersionStateStore: versionStore,
+      cookingStore: cookingStore,
+    );
+    await controller.load();
+    final base = controller.revisionFor(recipeId, 1)!;
+    await cookingStore.startCooking(
+      base,
+      base.contextFor(base.servings),
+      base.steps.first['id'] as String,
+    );
+    final cookingBefore = await cookingStore.read();
+    await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+
+    final latestAction = find.byKey(Key('activate_latest_recipe_$recipeId'));
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
+    await tester.tap(find.byTooltip('レシピの操作'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PopupMenuItem<String>>(latestAction).enabled, isTrue);
+    await tester.tap(latestAction);
+    await tester.pumpAndSettle();
+
+    expect(controller.activeRecipeFor(recipeId)?.revision, 2);
+    expect(controller.revisionsFor(recipeId), hasLength(2));
+    expect(await versionStore.loadActiveRevisions(), {recipeId: 2});
+    expect(await cookingStore.read(), cookingBefore);
+    expect(versionStore.writes, 1);
+    expect(find.text('豚の生姜焼き 改良版'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('レシピの操作'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PopupMenuItem<String>>(latestAction).enabled, isFalse);
+    await tester.tap(latestAction);
+    await tester.pumpAndSettle();
+    expect(versionStore.writes, 1);
+    await tester.tap(find.text('アーカイブへ移す'));
+    await tester.pumpAndSettle();
+    expect(controller.archivedRecipes, hasLength(1));
+  });
+
+  testWidgets(
+    'failed latest switch keeps the displayed and saved active recipe',
+    (tester) async {
+      final first = jsonDecode(recipeSource) as Map<String, dynamic>;
+      final second = jsonDecode(recipeSource) as Map<String, dynamic>;
+      final id = (first['recipe'] as Map)['id'] as String;
+      (second['recipe'] as Map)
+        ..['revision'] = 2
+        ..['parent_revision'] = 1
+        ..['title'] = '保存しない改良版';
+      final versions = _QuickSwitchVersionStore({id: 1})..fail = true;
+      final documents = _MemoryRecipeDocumentStore([first, second]);
+      final controller = RecipeLibraryController(
+        documents,
+        _MemoryRecipeTagStore(),
+        RecipeValidator.fromSchemaString(schemaSource),
+        () async => null,
+        recipeVersionStateStore: versions,
+      );
+      await controller.load();
+      await tester.pumpWidget(
+        RecipeCookingNavigatorApp(controller: controller),
+      );
+      await tester.tap(find.byTooltip('レシピの操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('activate_latest_recipe_$id')));
+      await tester.pumpAndSettle();
+      expect(find.text('切替の保存に失敗しました。'), findsOneWidget);
+      expect(find.text('豚の生姜焼き'), findsOneWidget);
+      expect(find.text('保存しない改良版'), findsNothing);
+      expect(controller.activeRecipeFor(id)!.revision, 1);
+      expect(await versions.loadActiveRevisions(), {id: 1});
+      expect(controller.revisionsFor(id), hasLength(2));
+      expect(documents.documents, [first, second]);
+      controller.dispose();
+    },
+  );
 
   testWidgets('shared recipe uses the same validation and confirmation', (
     tester,
@@ -170,27 +267,28 @@ void main() {
     await tester.pump();
 
     share.add(recipeSource);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('このレシピを取り込みますか？'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('レシピの内容確認'), findsOneWidget);
     expect((await store.loadDocuments()), isEmpty);
     share.add(recipeSource);
     await tester.tap(find.byKey(const Key('cancel_recipe_import')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('このレシピを取り込みますか？'), findsOneWidget);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('discard_recipe_import')));
+    await tester.pumpAndSettle();
+    expect(find.text('レシピの内容確認'), findsOneWidget);
     await tester.tap(find.byKey(const Key('cancel_recipe_import')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('discard_recipe_import')));
     await tester.pumpAndSettle();
     expect((await store.loadDocuments()), isEmpty);
 
     share.add('{broken');
     await tester.pumpAndSettle();
-    expect(find.text('このレシピを取り込みますか？'), findsNothing);
+    expect(find.text('レシピの内容確認'), findsNothing);
     expect((await store.loadDocuments()), isEmpty);
 
     share.add(recipeSource);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirm_recipe_import')));
     await tester.pumpAndSettle();
     expect((await store.loadDocuments()), hasLength(1));
@@ -281,12 +379,12 @@ void main() {
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
 
     expect(find.text('豚の生姜焼き'), findsOneWidget);
-    expect(find.textContaining('Active Version 1'), findsOneWidget);
+    expect(find.text('新しい版があります'), findsOneWidget);
     await tester.tap(find.text('豚の生姜焼き'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Active Version 1'), findsOneWidget);
-    expect(find.text('Latest Version 2'), findsOneWidget);
+    expect(find.text('使用中の版 1'), findsOneWidget);
+    expect(find.text('最新の版 2'), findsOneWidget);
     await tester.tap(find.byKey(const Key('open_version_history')));
     await tester.pumpAndSettle();
 
@@ -305,8 +403,8 @@ void main() {
     await tester.tap(find.byTooltip('戻る'));
     await tester.pumpAndSettle();
     expect(find.text('豚の生姜焼き 改良版'), findsOneWidget);
-    expect(find.text('Active Version 2'), findsOneWidget);
-    expect(find.text('Latest Version 2'), findsNothing);
+    expect(find.text('使用中の版 2'), findsOneWidget);
+    expect(find.text('最新の版 2'), findsNothing);
     expect(find.textContaining('調理途中です・Version 1'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('resume_cooking')));
@@ -318,6 +416,8 @@ void main() {
     await tester.tap(find.text('中断する'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const Key('start_cooking')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('start_cooking')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirm_restart_cooking')));
@@ -536,10 +636,12 @@ void main() {
     await controller.load();
 
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+    await tester.tap(find.byKey(const Key('open_settings')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('app_information_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('このアプリについて'), findsOneWidget);
+    expect(find.text('このアプリについて'), findsWidgets);
     expect(find.text('安全に関する注意'), findsOneWidget);
     expect(find.textContaining('アレルギー'), findsOneWidget);
     expect(find.textContaining('Apache License 2.0'), findsOneWidget);
@@ -561,12 +663,16 @@ void main() {
     );
     await controller.load();
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+    await tester.tap(find.byKey(const Key('open_recipe_import')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('import_recipe_button')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byKey(const Key('confirm_recipe_import')));
     await tester.pumpAndSettle();
 
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('recipe_search_field')), 'こま');
     await tester.pump();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
@@ -621,6 +727,8 @@ void main() {
     await controller.load();
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
 
+    await tester.tap(find.byKey(const Key('open_recipe_import')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('check_recipe_inbox_button')));
     await tester.pumpAndSettle();
     expect(find.text('Inboxフォルダを選択'), findsOneWidget);
@@ -634,7 +742,7 @@ void main() {
     await tester.tap(find.text('閉じる'));
     await tester.pumpAndSettle();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
-    expect(find.text('接続先: Google Drive / Inbox'), findsOneWidget);
+    expect(controller.inboxFolder?.displayName, 'Inbox');
   });
 
   testWidgets('keeps file import enabled while Inbox check is pending', (
@@ -663,17 +771,20 @@ void main() {
     await controller.load();
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
 
+    await tester.tap(find.byKey(const Key('open_recipe_import')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('check_recipe_inbox_button')));
     await tester.pump();
 
-    final importButton = tester.widget<OutlinedButton>(
+    await tester.tap(find.byKey(const Key('open_recipe_import')));
+    await tester.pumpAndSettle();
+    final importButton = tester.widget<ListTile>(
       find.byKey(const Key('import_recipe_button')),
     );
-    expect(importButton.onPressed, isNotNull);
+    expect(importButton.enabled, isTrue);
 
     await tester.tap(find.byKey(const Key('import_recipe_button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 10));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirm_recipe_import')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -704,6 +815,8 @@ void main() {
     );
     await controller.load();
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
+    await tester.tap(find.byKey(const Key('open_recipe_import')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('import_recipe_button')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -1139,6 +1252,151 @@ void main() {
     expect((assessment['evaluation'] as Map)['overall'], 4);
     expect(assessment['actual_time_minutes'], greaterThanOrEqualTo(1));
   });
+  testWidgets('settings, information and archive fit narrow enlarged text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = RecipeLibraryController(
+      _MemoryRecipeDocumentStore([
+        jsonDecode(recipeSource) as Map<String, dynamic>,
+      ]),
+      _MemoryRecipeTagStore(),
+      RecipeValidator.fromSchemaString(schemaSource),
+      () async => null,
+    );
+    await controller.load();
+    await controller.setArchived(controller.recipes.single.id, true);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RecipeTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: HomeScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open_settings')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byKey(const Key('app_information_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('app_information_button')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('閉じる'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open_recipe_archive')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('アーカイブ'));
+    await tester.pumpAndSettle();
+    expect(find.text('豚の生姜焼き'), findsOneWidget);
+    expect(find.byTooltip('アーカイブの操作').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  for (final width in [320.0, 412.0]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+        'remaining recipe screens scroll without overflow $width/$scale',
+        (tester) async {
+          tester.view.physicalSize = Size(width, 800);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final validator = RecipeValidator.fromSchemaString(schemaSource);
+          final longDocument = jsonDecode(recipeSource) as Map<String, dynamic>;
+          longDocument['recipe']['title'] = '野菜をたっぷり使った、家族みんなで楽しむ豚の生姜焼き';
+          longDocument['recipe']['ingredients'][0]['name'] =
+              '国産の豚こま切れ肉（食べやすい大きさに切ったもの）';
+          final recipe = validator.validateSource(jsonEncode(longDocument));
+          final cookingStore = CookingStore(null, validator);
+          await cookingStore.startCooking(
+            recipe,
+            recipe.contextFor(2),
+            'step-onion',
+          );
+          await cookingStore.complete(recipe.id, recipe.revision);
+          await cookingStore.markHelpSeen();
+          final controller = RecipeLibraryController(
+            _MemoryRecipeDocumentStore([recipe.raw]),
+            _MemoryRecipeTagStore(),
+            validator,
+            () async => null,
+            cookingStore: cookingStore,
+          );
+          await controller.load();
+          for (final screen in [
+            RecipeDetailScreen(recipe: recipe, controller: controller),
+            RecipeVersionHistoryScreen(
+              recipeId: recipe.id,
+              controller: controller,
+            ),
+            FeedbackScreen(recipeId: recipe.id, controller: controller),
+            CookingScreen(
+              recipe: recipe,
+              store: cookingStore,
+              initialIndex: 0,
+              cookingContext: recipe.contextFor(2),
+            ),
+          ]) {
+            await tester.pumpWidget(
+              MaterialApp(
+                key: UniqueKey(),
+                theme: RecipeTheme.light,
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(scale)),
+                  child: child!,
+                ),
+                home: screen,
+              ),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: screen.runtimeType.toString(),
+            );
+            final scroller = find.byType(Scrollable).first;
+            for (var sweep = 0; sweep < 60; sweep++) {
+              final position = tester.state<ScrollableState>(scroller).position;
+              if (position.pixels >= position.maxScrollExtent) break;
+              await tester.drag(scroller, const Offset(0, -400));
+              await tester.pumpAndSettle();
+              expect(
+                tester.takeException(),
+                isNull,
+                reason: '${screen.runtimeType} while scrolling',
+              );
+            }
+            if (screen is CookingScreen) {
+              expect(
+                find.byKey(const Key('next_step_button')).hitTestable(),
+                findsOneWidget,
+              );
+              await tester.tap(find.byKey(const Key('next_step_button')));
+              await tester.pumpAndSettle();
+              expect(tester.takeException(), isNull);
+            }
+            await tester.pumpWidget(const SizedBox.shrink());
+            await tester.pumpAndSettle();
+          }
+          expect(controller.revisionsFor(recipe.id).single.raw, recipe.raw);
+          controller.dispose();
+        },
+      );
+    }
+  }
 }
 
 class _MemoryRecipeDocumentStore implements RecipeDocumentStore {
@@ -1154,6 +1412,22 @@ class _MemoryRecipeDocumentStore implements RecipeDocumentStore {
   Future<StoreRecipeResult> saveDocument(Map<String, dynamic> document) async {
     documents.add(document);
     return StoreRecipeResult.added;
+  }
+}
+
+class _QuickSwitchVersionStore extends MemoryRecipeVersionStateStore {
+  _QuickSwitchVersionStore(super.initial);
+
+  int writes = 0;
+  bool fail = false;
+
+  @override
+  Future<void> saveActiveRevision(String recipeId, int revision) async {
+    writes++;
+    if (fail) {
+      throw const RecipeVersionStateStorageException('切替の保存に失敗しました。');
+    }
+    await super.saveActiveRevision(recipeId, revision);
   }
 }
 

@@ -287,7 +287,7 @@ class SiwcRuntime {
         rethrow;
       }
     } on SiwcFailure catch (error) {
-      throw SiwcFailure('$stage: ${error.message}');
+      throw SiwcFailure('$stage: ${error.message}', kind: error.kind);
     } on SocketException catch (error) {
       throw SiwcFailure('$stage: ${safeSocketFailure(error)}');
     } on HandshakeException {
@@ -368,7 +368,10 @@ class SiwcRuntime {
     }
     final refreshToken = profile['refresh_token'];
     if (refreshToken is! String || refreshToken.isEmpty) {
-      throw const SiwcFailure('再ログインが必要です。');
+      throw const SiwcFailure(
+        '再ログインが必要です。',
+        kind: SiwcFailureKind.authentication,
+      );
     }
     final tokens = await network.postForm(Uri.parse(tokenEndpoint), {
       'grant_type': 'refresh_token',
@@ -462,9 +465,18 @@ class SiwcRuntime {
       _check(epoch);
       return result;
     } on SiwcFailure catch (error) {
-      throw SiwcFailure('$stage: ${error.message}');
+      throw SiwcFailure('$stage: ${error.message}', kind: error.kind);
     } catch (error) {
-      throw SiwcFailure('$stage: ${safeNetworkFailure(error)}');
+      throw SiwcFailure(
+        '$stage: ${safeNetworkFailure(error)}',
+        kind:
+            error is SocketException ||
+                error is TimeoutException ||
+                error is HandshakeException ||
+                error is HttpException
+            ? SiwcFailureKind.network
+            : SiwcFailureKind.unknown,
+      );
     }
   }
 

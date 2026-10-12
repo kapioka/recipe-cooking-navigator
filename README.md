@@ -2,7 +2,9 @@
 
 ChatGPTなどで生成した構造化レシピをスマートフォンへ取り込み、調理前の全体把握、ハンズフリー調理、調理後評価、ChatGPTによる再改善までを一続きで支援することを目指す公開プロジェクトです。
 
-> Status: Android initial version (`0.1.0`) / レシピのファイル取り込みから調理完了まで実装済み
+> Status: Android version (`0.2.0`) / レシピ作成・取り込み、調理、評価・改善の主要フローを実装済み
+
+Android用APKは[GitHub Release](https://github.com/kapioka/recipe-cooking-navigator/releases/tag/v0.2.0)からダウンロードできます。
 
 ChatGPT側で対応Recipeを生成するための公開Packageは、[Recipe Cooking Navigator — ChatGPT Project Package](https://github.com/kapioka/ai-prompt-library/tree/main/prompts/food-drink/recipe-cooking-navigator)で配布しています。
 
@@ -90,9 +92,25 @@ v1 Schemaは公開済み履歴として残しています。現行アプリはv1
 - 1工程ずつのCooking mode、工程一覧、中断位置の保存・再開
 - 音声操作、現在工程の読み上げ、ユーザー起動タイマー
 - Cooking mode中の画面常時点灯と終了時の解除
-- 調理完了時の最小Cook Session記録
+- 調理完了時のCook Session記録、調理後評価、Feedback JSON共有
+- 最新Versionと次回使用Versionを分けた履歴管理と、選択Versionからの改善依頼
+- Kitchen modeの時計・共通タイマーと料理の好みの記録
 
-次の段階では、Kitchen modeと共通タイマーを整えた後、調理後評価、Feedback JSON共有、過去Versionからの改善ループへ進みます。詳細は[ロードマップ](docs/roadmap.md)を参照してください。
+### 0.2.0の更新
+
+ホームのクリーム色・深いグリーンを基準に、レシピ作成、内容確認、詳細、履歴、評価、好み、設定、調理、Kitchenの見た目を統一しました。内容ごとのまとまりをやわらかな角丸の面で示し、主なボタンの配置と操作の流れを保っています。
+
+- 本と鍋を組み合わせた新しいアプリアイコン
+- 「条件 → 作成中 → 内容確認」で進むレシピ作成と、確認してから保存する取り込み
+- Sign in with ChatGPT連携を本体へ統合し、接続状態・モデルの設定を専用画面へ整理
+- 入力途中の条件を保持し、取消や保存失敗から戻れる作成画面
+- お皿アイコンから任意の料理写真を選び、位置・拡大率を調整して丸く切り抜く機能
+- 狭い画面や文字拡大時にも読みやすい入力欄・材料表示・操作欄
+- ホームの「︙」から保存済みの最新版レシピへ切替。過去Versionと調理途中の記録は保持
+
+料理写真は端末内に保存し、同じRecipeのVersion間で共通に使います。Recipe / Feedback JSON、Drive共有、Android自動バックアップには含めません。レシピに写真がない場合も、お皿アイコンで表示します。
+
+更新内容と対応範囲は[0.2.0のリリースノート](docs/releases/0.2.0.md)、今後の対象は[ロードマップ](docs/roadmap.md)を参照してください。
 
 ## 共有方針
 
@@ -166,9 +184,11 @@ Recipe Cooking Navigatorは以下を行いません。
 
 ## 現在の状態
 
-FlutterによるAndroid初期版を実装済みです。Recipe / Feedback Schema v2と人数変更はローカル実装・自動検証・Pixel 10a実機確認済みです。配布用ChatGPT Project Packageはv2のローカル出力まで完了し、Project実設定の切替と生成Recipeの往復確認が残っています。公開版`0.1.0`についてはPixel 10aでファイル取り込み、保存データを維持した更新、Cooking mode、TTS、音声操作、タイマー、中断・再開を確認しています。
+FlutterによるAndroid版を実装済みです。現行版はRecipe / Feedback Schema v2に対応し、人数変更、Version履歴、調理後評価・Feedback共有・改善依頼、Kitchen、料理の好みの記録を実装しています。公開ChatGPT Project Packageのv2契約を照合した正式署名APKを配布します。
 
-調理後評価・Feedback v2共有・選択Versionの改善依頼、KitchenとProfile履歴の基盤を実装しています。ChatGPTへの標準共有/コピー依頼は公開v2契約の照合後に有効化します。独立したSign in with ChatGPT PoCは`poc/siwc_android`にあり、本体との統合は実機での認証・完了推論成功後に進めます。SNS共有、バックアップ、iOS版は未実装です。調理雑音下での音声認識精度、TalkBack、長時間点灯、Kitchenの背景動作、Profileの実運用は未確認です。
+Sign in with ChatGPTは本体へ統合済みで、Pixel 10aで認証、レシピ生成、確認・保存を確認しています。PoCは開発用の独立プロジェクトとして残していますが、本体の利用に別のPoCアプリは不要です。今回の画面更新はunit / widget tests、静的解析、正式署名buildで検証しています。各画面の見た目と写真選択・切り抜きの実機操作は、利用者による最終確認が残っています。
+
+SNS共有素材、ファイルによるバックアップ、iOS版は未実装です。調理雑音下での音声認識精度、TalkBack、長時間点灯、Kitchenの背景動作、Profileの実運用は未確認です。
 
 ## 開発・検証
 

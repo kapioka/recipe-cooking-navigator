@@ -33,33 +33,41 @@ class _PreferenceRecordDialogState extends State<PreferenceRecordDialog> {
         children: [
           const Text('この調理の評価とメモを端末内に蓄積します。料理のカテゴリは自分で指定してください。'),
           const SizedBox(height: 12),
-          TextField(
-            controller: _category,
-            key: const Key('preference_category'),
-            decoration: InputDecoration(
-              labelText: '料理のカテゴリ（主菜、スープなど）',
-              errorText: _categoryMissing ? 'カテゴリを入力してください。' : null,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TextField(
+              controller: _category,
+              key: const Key('preference_category'),
+              decoration: InputDecoration(
+                labelText: '料理のカテゴリ（主菜、スープなど）',
+                errorText: _categoryMissing ? 'カテゴリを入力してください。' : null,
+              ),
             ),
           ),
           const SizedBox(height: 12),
           const Text('次回の味の希望（任意）。ここで明示した方向を候補判定に使います。'),
           for (final dimension in widget.dimensions.entries)
-            DropdownButtonFormField<int>(
-              key: Key('preference_intent_${dimension.key}'),
-              initialValue: 0,
-              decoration: InputDecoration(labelText: dimension.value),
-              items: const [
-                DropdownMenuItem(value: 0, child: Text('指定しない')),
-                DropdownMenuItem(value: -1, child: Text('控えめにしたい')),
-                DropdownMenuItem(value: 1, child: Text('強めにしたい')),
-              ],
-              onChanged: (value) {
-                if (value == null || value == 0) {
-                  _directions.remove(dimension.key);
-                } else {
-                  _directions[dimension.key] = value;
-                }
-              },
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<int>(
+                isExpanded: true,
+                itemHeight: null,
+                key: Key('preference_intent_${dimension.key}'),
+                initialValue: 0,
+                decoration: InputDecoration(labelText: dimension.value),
+                items: const [
+                  DropdownMenuItem(value: 0, child: Text('指定しない')),
+                  DropdownMenuItem(value: -1, child: Text('控えめにしたい')),
+                  DropdownMenuItem(value: 1, child: Text('強めにしたい')),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == 0) {
+                    _directions.remove(dimension.key);
+                  } else {
+                    _directions[dimension.key] = value;
+                  }
+                },
+              ),
             ),
         ],
       ),

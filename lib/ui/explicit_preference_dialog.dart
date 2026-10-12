@@ -87,77 +87,106 @@ class _ExplicitPreferenceDialogState extends State<ExplicitPreferenceDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('普段の好みを自分で指定します。評価の回数に関係なく、確認した内容を端末に登録します。'),
-            DropdownButtonFormField<PreferenceScopeKind>(
-              key: const Key('explicit_preference_scope'),
-              initialValue: kind,
-              decoration: const InputDecoration(labelText: '対象'),
-              items: [
-                const DropdownMenuItem(
-                  value: PreferenceScopeKind.global,
-                  child: Text('全料理'),
-                ),
-                const DropdownMenuItem(
-                  value: PreferenceScopeKind.category,
-                  child: Text('料理のカテゴリ'),
-                ),
-                if (recipes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<PreferenceScopeKind>(
+                isExpanded: true,
+                itemHeight: null,
+                key: const Key('explicit_preference_scope'),
+                initialValue: kind,
+                decoration: const InputDecoration(labelText: '対象'),
+                items: [
                   const DropdownMenuItem(
-                    value: PreferenceScopeKind.recipe,
-                    child: Text('このレシピ'),
+                    value: PreferenceScopeKind.global,
+                    child: Text('全料理'),
                   ),
-              ],
-              onChanged: (value) => setState(() => kind = value!),
+                  const DropdownMenuItem(
+                    value: PreferenceScopeKind.category,
+                    child: Text('料理のカテゴリ'),
+                  ),
+                  if (recipes.isNotEmpty)
+                    const DropdownMenuItem(
+                      value: PreferenceScopeKind.recipe,
+                      child: Text('このレシピ'),
+                    ),
+                ],
+                onChanged: (value) => setState(() => kind = value!),
+              ),
             ),
             if (kind == PreferenceScopeKind.category)
-              TextField(
-                key: const Key('explicit_preference_category'),
-                controller: category,
-                decoration: const InputDecoration(labelText: 'カテゴリ（例：主菜）'),
-                onChanged: (_) => setState(() {}),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  key: const Key('explicit_preference_category'),
+                  controller: category,
+                  decoration: const InputDecoration(labelText: 'カテゴリ（例：主菜）'),
+                  onChanged: (_) => setState(() {}),
+                ),
               ),
             if (kind == PreferenceScopeKind.recipe)
-              DropdownButtonFormField<String>(
-                key: const Key('explicit_preference_recipe'),
-                initialValue: recipeId,
-                decoration: const InputDecoration(labelText: 'レシピ'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  itemHeight: null,
+                  key: const Key('explicit_preference_recipe'),
+                  initialValue: recipeId,
+                  decoration: const InputDecoration(labelText: 'レシピ'),
+                  items: [
+                    for (final entry in recipes.entries)
+                      DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => recipeId = value),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                itemHeight: null,
+                key: const Key('explicit_preference_dimension'),
+                initialValue: dimension,
+                decoration: const InputDecoration(labelText: '味や食感'),
                 items: [
-                  for (final entry in recipes.entries)
+                  for (final entry in widget.labels.entries)
                     DropdownMenuItem(
                       value: entry.key,
                       child: Text(entry.value),
                     ),
                 ],
-                onChanged: (value) => setState(() => recipeId = value),
+                onChanged: (value) => setState(() => dimension = value!),
               ),
-            DropdownButtonFormField<String>(
-              key: const Key('explicit_preference_dimension'),
-              initialValue: dimension,
-              decoration: const InputDecoration(labelText: '味や食感'),
-              items: [
-                for (final entry in widget.labels.entries)
-                  DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-              ],
-              onChanged: (value) => setState(() => dimension = value!),
             ),
-            DropdownButtonFormField<int>(
-              key: const Key('explicit_preference_direction'),
-              initialValue: direction,
-              decoration: const InputDecoration(labelText: '希望'),
-              items: const [
-                DropdownMenuItem(value: -1, child: Text('控えめに')),
-                DropdownMenuItem(value: 1, child: Text('強めに')),
-              ],
-              onChanged: (value) => setState(() => direction = value!),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<int>(
+                isExpanded: true,
+                itemHeight: null,
+                key: const Key('explicit_preference_direction'),
+                initialValue: direction,
+                decoration: const InputDecoration(labelText: '希望'),
+                items: const [
+                  DropdownMenuItem(value: -1, child: Text('控えめに')),
+                  DropdownMenuItem(value: 1, child: Text('強めに')),
+                ],
+                onChanged: (value) => setState(() => direction = value!),
+              ),
             ),
-            TextField(
-              key: const Key('explicit_preference_declaration'),
-              controller: declaration,
-              maxLength: 2000,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: '好みの説明',
-                hintText: '例：普段から塩味が控えめな料理が好き',
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                key: const Key('explicit_preference_declaration'),
+                controller: declaration,
+                maxLength: 2000,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: '好みの説明',
+                  hintText: '例：普段から塩味が控えめな料理が好き',
+                ),
               ),
             ),
             Text(

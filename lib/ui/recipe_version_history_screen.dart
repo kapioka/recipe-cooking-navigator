@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
 import 'feedback_screen.dart';
+import 'recipe_section.dart';
+import 'recipe_theme.dart';
 
 class RecipeVersionHistoryScreen extends StatefulWidget {
   const RecipeVersionHistoryScreen({
@@ -37,16 +39,21 @@ class _RecipeVersionHistoryScreenState
               : ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                   children: [
-                    Text(
-                      latest?.title ?? revisions.first.title,
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    RecipeSection(
+                      color: RecipeTheme.sage,
+                      children: [
+                        Text(
+                          latest?.title ?? revisions.first.title,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'activeは通常表示と「最初から」の調理に使うVersionです。'
+                          '切り替えても、保存済みの調理途中位置や過去Versionは変更しません。',
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'activeは通常表示と「最初から」の調理に使うVersionです。'
-                      '切り替えても、保存済みの調理途中位置や過去Versionは変更しません。',
-                    ),
-                    const SizedBox(height: 16),
                     for (final revision in revisions)
                       _VersionCard(
                         revision: revision,
@@ -154,8 +161,8 @@ class _VersionCard extends StatelessWidget {
                   'Version ${revision.revision}',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                if (isLatest) const Chip(label: Text('latest')),
-                if (isActive) const Chip(label: Text('active')),
+                if (isLatest) const Chip(label: Text('最新の版')),
+                if (isActive) const Chip(label: Text('使用中の版')),
               ],
             ),
             const SizedBox(height: 4),

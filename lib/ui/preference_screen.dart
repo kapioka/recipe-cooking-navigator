@@ -5,6 +5,8 @@ import '../domain/preference_candidate.dart';
 import '../domain/preference_evidence.dart';
 import '../domain/recipe_document.dart';
 import 'explicit_preference_dialog.dart';
+import 'recipe_section.dart';
+import 'recipe_theme.dart';
 
 class PreferenceScreen extends StatefulWidget {
   const PreferenceScreen({
@@ -232,24 +234,31 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text('評価を重ねて見つかった傾向を、確認してから登録します。候補だけで好みが変更されることはありません。'),
-            const SizedBox(height: 16),
-            if (controller.isBusy) const LinearProgressIndicator(),
-            if (controller.error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  controller.error!,
-                  key: const Key('preference_error'),
-                ),
-              ),
-            Text('蓄積した評価：${snapshot?.evidence.length ?? 0}件'),
-            if (snapshot != null && profile == null)
-              FilledButton(
-                key: const Key('initialize_profile'),
-                onPressed: controller.isBusy ? null : controller.initialize,
-                child: const Text('好みの登録を始める'),
-              ),
+            RecipeSection(
+              title: 'わたしの料理の好み',
+              icon: Icons.tune,
+              color: RecipeTheme.sage,
+              children: [
+                const Text('評価を重ねて見つかった傾向を、確認してから登録します。候補だけで好みが変更されることはありません。'),
+                const SizedBox(height: 16),
+                if (controller.isBusy) const LinearProgressIndicator(),
+                if (controller.error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      controller.error!,
+                      key: const Key('preference_error'),
+                    ),
+                  ),
+                Text('蓄積した評価：${snapshot?.evidence.length ?? 0}件'),
+                if (snapshot != null && profile == null)
+                  FilledButton(
+                    key: const Key('initialize_profile'),
+                    onPressed: controller.isBusy ? null : controller.initialize,
+                    child: const Text('好みの登録を始める'),
+                  ),
+              ],
+            ),
             if (profile != null) ...[
               OutlinedButton.icon(
                 key: const Key('register_explicit_preference'),
@@ -258,37 +267,41 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
                 label: const Text('自分の好みを登録'),
               ),
               const SizedBox(height: 24),
-              Text(
-                '登録済みの好み（更新 ${profile.revision}）',
-                style: Theme.of(context).textTheme.titleMedium,
+              RecipeSection(
+                children: [
+                  Text(
+                    '登録済みの好み（更新 ${profile.revision}）',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if ((profile.toJson()['preferences'] as List).isEmpty)
+                    const Text('まだ登録されていません。'),
+                  for (final p in profile.toJson()['preferences'] as List)
+                    ListTile(
+                      trailing:
+                          controller.profileWriter != null &&
+                              controller.cachedProfile?.historyRecordId != null
+                          ? TextButton(
+                              onPressed:
+                                  controller.isBusy ||
+                                      controller.hasPendingProfileWrite
+                                  ? null
+                                  : () => _publishPreference(
+                                      Map<String, dynamic>.from(p as Map),
+                                    ),
+                              child: const Text('Driveへ反映'),
+                            )
+                          : null,
+                      title: Text(
+                        '${labels[p['dimension']]}を${p['direction'] == -1 ? '控えめに' : '強めに'}',
+                      ),
+                      subtitle: Text(
+                        '${scopeLabel(Map<String, dynamic>.from(p['scope'] as Map))}'
+                        '${p['source_kind'] == 'explicit_user' ? '\n自分で指定：${p['declaration']}' : '\n評価から確認して登録'}',
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                ],
               ),
-              if ((profile.toJson()['preferences'] as List).isEmpty)
-                const Text('まだ登録されていません。'),
-              for (final p in profile.toJson()['preferences'] as List)
-                ListTile(
-                  trailing:
-                      controller.profileWriter != null &&
-                          controller.cachedProfile?.historyRecordId != null
-                      ? TextButton(
-                          onPressed:
-                              controller.isBusy ||
-                                  controller.hasPendingProfileWrite
-                              ? null
-                              : () => _publishPreference(
-                                  Map<String, dynamic>.from(p as Map),
-                                ),
-                          child: const Text('Driveへ反映'),
-                        )
-                      : null,
-                  title: Text(
-                    '${labels[p['dimension']]}を${p['direction'] == -1 ? '控えめに' : '強めに'}',
-                  ),
-                  subtitle: Text(
-                    '${scopeLabel(Map<String, dynamic>.from(p['scope'] as Map))}'
-                    '${p['source_kind'] == 'explicit_user' ? '\n自分で指定：${p['declaration']}' : '\n評価から確認して登録'}',
-                  ),
-                ),
-              const SizedBox(height: 24),
               Text('確認待ちの候補', style: Theme.of(context).textTheme.titleMedium),
               if (controller.proposals.isEmpty)
                 const Text('候補はありません。異なる料理の評価を重ねると、傾向を確認できます。'),
@@ -346,157 +359,177 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
             ],
             const SizedBox(height: 24),
             if (controller.archive != null) ...[
-              Text(
-                '評価をDriveに残す',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const Text(
-                'Google Driveの「Recipe Cooking Navigator」フォルダを選びます。評価とメモをFeedbackフォルダへ追記します。',
-              ),
-              OutlinedButton.icon(
-                key: const Key('connect_feedback_archive'),
-                onPressed: controller.isBusy ? null : controller.connectArchive,
-                icon: const Icon(Icons.folder_open),
-                label: Text(
-                  controller.archiveRoot == null
-                      ? 'Drive保存先を選ぶ'
-                      : 'Drive保存先を選び直す',
-                ),
-              ),
-              if (controller.archiveRoot != null)
-                FilledButton.icon(
-                  key: const Key('export_feedback_evidence'),
-                  onPressed:
-                      controller.isBusy || (snapshot?.evidence.isEmpty ?? true)
-                      ? null
-                      : () async {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('評価をDriveに保存しますか？'),
-                              content: Text(
-                                '${snapshot!.evidence.length}件の評価とメモを選択したDriveフォルダへ保存します。保存先の公開範囲を確認してください。',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('戻る'),
-                                ),
-                                FilledButton(
-                                  key: const Key('confirm_export_feedback'),
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('保存する'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirmed == true) {
-                            await controller.exportEvidence();
-                          }
-                        },
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: const Text('蓄積した評価をDriveへ保存'),
-                ),
-              if (controller.archiveMessage != null)
-                Text(controller.archiveMessage!),
-              OutlinedButton.icon(
-                key: const Key('import_drive_evidence'),
-                onPressed: controller.isBusy || controller.archiveRoot == null
-                    ? null
-                    : () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Driveの評価を読み込みますか？'),
-                            content: const Text(
-                              '蓄積した評価とメモを端末に追加して候補を再集計します。元ファイルと登録済みの好みは変更しません。',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('戻る'),
-                              ),
-                              FilledButton(
-                                key: const Key('confirm_import_drive_evidence'),
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('読み込む'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirmed == true) {
-                          await controller.importEvidence();
-                        }
-                      },
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('Driveの評価を読み込む'),
-              ),
-              if (controller.importMessage != null)
-                Text(controller.importMessage!),
-              if (controller.importErrors.isNotEmpty)
-                ExpansionTile(
-                  title: const Text('読み込めなかった評価'),
-                  children: [
-                    for (final error in controller.importErrors)
-                      ListTile(title: Text(error)),
-                  ],
-                ),
-              if (controller.profileCache != null) ...[
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  key: const Key('refresh_drive_profile'),
-                  onPressed: controller.isBusy || controller.archiveRoot == null
-                      ? null
-                      : controller.refreshProfile,
-                  icon: const Icon(Icons.cloud_download_outlined),
-                  label: const Text('Driveの好みを確認する'),
-                ),
-                if (controller.profileMessage != null)
-                  Text(controller.profileMessage!),
-                if (controller.profileWriter != null &&
-                    controller.archiveRoot != null) ...[
-                  if (controller.hasPendingProfileWrite)
-                    OutlinedButton(
-                      key: const Key('retry_profile_write'),
-                      onPressed: controller.isBusy
-                          ? null
-                          : controller.retryProfileWrite,
-                      child: const Text('好みの保存結果を再確認'),
-                    )
-                  else if (controller.cachedProfile?.historyRecordId == null)
-                    OutlinedButton(
-                      key: const Key('start_drive_history'),
-                      onPressed: controller.isBusy ? null : _startDriveHistory,
-                      child: const Text('Driveの好みの保存を始める'),
-                    ),
-                ],
-                if (controller.cachedProfile != null) ...[
+              RecipeSection(
+                color: RecipeTheme.sage,
+                children: [
                   Text(
-                    'Driveで確認した好み（読取専用・更新 ${controller.cachedProfile!.profile.revision}）',
+                    '評価をDriveに残す',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  for (final p
-                      in controller.cachedProfile!.profile
-                              .toJson()['preferences']
-                          as List)
-                    ListTile(
-                      title: Text(
-                        '${labels[p['dimension']]}を${p['direction'] == -1 ? '控えめに' : '強めに'}',
-                      ),
-                      subtitle: Text(
-                        scopeLabel(
-                          Map<String, dynamic>.from(p['scope'] as Map),
-                        ),
-                      ),
+                  const Text(
+                    'Google Driveの「Recipe Cooking Navigator」フォルダを選びます。評価とメモをFeedbackフォルダへ追記します。',
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('connect_feedback_archive'),
+                    onPressed: controller.isBusy
+                        ? null
+                        : controller.connectArchive,
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(
+                      controller.archiveRoot == null
+                          ? 'Drive保存先を選ぶ'
+                          : 'Drive保存先を選び直す',
                     ),
-                  for (final constraint
-                      in controller.cachedProfile!.profile
-                              .toJson()['explicit_constraints']
-                          as List)
-                    ListTile(title: Text('明示的な制約：$constraint')),
+                  ),
+                  if (controller.archiveRoot != null)
+                    FilledButton.icon(
+                      key: const Key('export_feedback_evidence'),
+                      onPressed:
+                          controller.isBusy ||
+                              (snapshot?.evidence.isEmpty ?? true)
+                          ? null
+                          : () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('評価をDriveに保存しますか？'),
+                                  content: Text(
+                                    '${snapshot!.evidence.length}件の評価とメモを選択したDriveフォルダへ保存します。保存先の公開範囲を確認してください。',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('戻る'),
+                                    ),
+                                    FilledButton(
+                                      key: const Key('confirm_export_feedback'),
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text('保存する'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed == true) {
+                                await controller.exportEvidence();
+                              }
+                            },
+                      icon: const Icon(Icons.cloud_upload_outlined),
+                      label: const Text('蓄積した評価をDriveへ保存'),
+                    ),
+                  if (controller.archiveMessage != null)
+                    Text(controller.archiveMessage!),
+                  OutlinedButton.icon(
+                    key: const Key('import_drive_evidence'),
+                    onPressed:
+                        controller.isBusy || controller.archiveRoot == null
+                        ? null
+                        : () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Driveの評価を読み込みますか？'),
+                                content: const Text(
+                                  '蓄積した評価とメモを端末に追加して候補を再集計します。元ファイルと登録済みの好みは変更しません。',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('戻る'),
+                                  ),
+                                  FilledButton(
+                                    key: const Key(
+                                      'confirm_import_drive_evidence',
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('読み込む'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              await controller.importEvidence();
+                            }
+                          },
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('Driveの評価を読み込む'),
+                  ),
+                  if (controller.importMessage != null)
+                    Text(controller.importMessage!),
+                  if (controller.importErrors.isNotEmpty)
+                    ExpansionTile(
+                      title: const Text('読み込めなかった評価'),
+                      children: [
+                        for (final error in controller.importErrors)
+                          ListTile(title: Text(error)),
+                      ],
+                    ),
+                  if (controller.profileCache != null) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      key: const Key('refresh_drive_profile'),
+                      onPressed:
+                          controller.isBusy || controller.archiveRoot == null
+                          ? null
+                          : controller.refreshProfile,
+                      icon: const Icon(Icons.cloud_download_outlined),
+                      label: const Text('Driveの好みを確認する'),
+                    ),
+                    if (controller.profileMessage != null)
+                      Text(controller.profileMessage!),
+                    if (controller.profileWriter != null &&
+                        controller.archiveRoot != null) ...[
+                      if (controller.hasPendingProfileWrite)
+                        OutlinedButton(
+                          key: const Key('retry_profile_write'),
+                          onPressed: controller.isBusy
+                              ? null
+                              : controller.retryProfileWrite,
+                          child: const Text('好みの保存結果を再確認'),
+                        )
+                      else if (controller.cachedProfile?.historyRecordId ==
+                          null)
+                        OutlinedButton(
+                          key: const Key('start_drive_history'),
+                          onPressed: controller.isBusy
+                              ? null
+                              : _startDriveHistory,
+                          child: const Text('Driveの好みの保存を始める'),
+                        ),
+                    ],
+                    if (controller.cachedProfile != null) ...[
+                      Text(
+                        'Driveで確認した好み（読取専用・更新 ${controller.cachedProfile!.profile.revision}）',
+                      ),
+                      for (final p
+                          in controller.cachedProfile!.profile
+                                  .toJson()['preferences']
+                              as List)
+                        ListTile(
+                          title: Text(
+                            '${labels[p['dimension']]}を${p['direction'] == -1 ? '控えめに' : '強めに'}',
+                          ),
+                          subtitle: Text(
+                            scopeLabel(
+                              Map<String, dynamic>.from(p['scope'] as Map),
+                            ),
+                          ),
+                        ),
+                      for (final constraint
+                          in controller.cachedProfile!.profile
+                                  .toJson()['explicit_constraints']
+                              as List)
+                        ListTile(title: Text('明示的な制約：$constraint')),
+                    ],
+                  ],
+                  const Text(
+                    '登録済みの好みを選んでDriveへ反映できます。端末とDriveのそれぞれに過去の好みを保持します。',
+                  ),
                 ],
-              ],
-              const Text('登録済みの好みを選んでDriveへ反映できます。端末とDriveのそれぞれに過去の好みを保持します。'),
+              ),
             ] else
               const Text('記録は端末内に保存しています。'),
           ],

@@ -30,7 +30,13 @@ import 'platform/recipe_inbox_platform.dart';
 import 'platform/recipe_share_platform.dart';
 import 'platform/kitchen_device.dart';
 import 'ui/home_screen.dart';
+import 'application/recipe_ai_client.dart';
+import 'application/recipe_ai_session.dart';
+import 'data/recipe_creation_store.dart';
+import 'data/recipe_photo_store.dart';
+import 'ui/recipe_ai_scope.dart';
 import 'ui/kitchen_screen.dart';
+import 'ui/recipe_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +75,9 @@ Future<void> main() async {
       File('${supportDirectory.path}/recipe-archive-v1.json'),
     ),
     legacyDataPresent: legacyDataPresent,
+    photoStore: FileRecipePhotoStore(
+      Directory('${supportDirectory.path}/recipe-photos-v1'),
+    ),
   );
   await controller.load();
 
@@ -99,7 +108,16 @@ Future<void> main() async {
     ),
   );
   runApp(
-    RecipeCookingNavigatorApp(controller: controller, preferences: preferences),
+    RecipeCookingNavigatorApp(
+      controller: controller,
+      preferences: preferences,
+      aiSession: RecipeAiSession(
+        AndroidRecipeAiClient(),
+        RecipeCreationStore(
+          File('${supportDirectory.path}/recipe-creation-v1.json'),
+        ),
+      ),
+    ),
   );
 }
 
@@ -108,12 +126,14 @@ class RecipeCookingNavigatorApp extends StatefulWidget {
     required this.controller,
     this.sharePlatform,
     this.preferences,
+    this.aiSession,
     super.key,
   });
 
   final RecipeLibraryController controller;
   final RecipeSharePlatform? sharePlatform;
   final PreferenceController? preferences;
+  final RecipeAiSession? aiSession;
 
   @override
   State<RecipeCookingNavigatorApp> createState() =>
@@ -125,6 +145,7 @@ class _RecipeCookingNavigatorAppState extends State<RecipeCookingNavigatorApp> {
   final _home = GlobalKey<HomeScreenState>();
   final _notificationTarget = ValueNotifier<String?>(null);
   late final RecipeSharePlatform _sharePlatform;
+  late final RecipeAiSession _aiSession;
   bool _drainingShares = false;
   bool _sharesSignalled = false;
   bool _kitchenOpen = false;
@@ -132,6 +153,9 @@ class _RecipeCookingNavigatorAppState extends State<RecipeCookingNavigatorApp> {
   @override
   void initState() {
     super.initState();
+    _aiSession =
+        widget.aiSession ??
+        RecipeAiSession(AndroidRecipeAiClient(), RecipeCreationStore());
     _sharePlatform = widget.sharePlatform ?? AndroidRecipeSharePlatform();
     _sharePlatform.setIncomingHandler(() {
       _sharesSignalled = true;
@@ -152,6 +176,7 @@ class _RecipeCookingNavigatorAppState extends State<RecipeCookingNavigatorApp> {
   @override
   void dispose() {
     _sharePlatform.dispose();
+    _aiSession.dispose();
     KitchenDevice.clearNotificationTapHandler();
     _notificationTarget.dispose();
     super.dispose();
@@ -192,10 +217,14 @@ class _RecipeCookingNavigatorAppState extends State<RecipeCookingNavigatorApp> {
   }
 
   Future<void> _waitForImportIdle() async {
-    if (!widget.controller.isImporting) return;
+    if (!widget.controller.isImporting && !widget.controller.creationOpen) {
+      return;
+    }
     final completer = Completer<void>();
     void onChange() {
-      if (!widget.controller.isImporting && !completer.isCompleted) {
+      if (!widget.controller.isImporting &&
+          !widget.controller.creationOpen &&
+          !completer.isCompleted) {
         completer.complete();
       }
     }
@@ -236,22 +265,21 @@ class _RecipeCookingNavigatorAppState extends State<RecipeCookingNavigatorApp> {
 
   @override
   Widget build(BuildContext context) {
-    final app = MaterialApp(
-      navigatorKey: _navigator,
-      title: 'Recipe Cooking Navigator',
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('ja', 'JP'),
-      supportedLocales: const [Locale('ja', 'JP')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE56A3D)),
-        fontFamily: 'sans-serif',
-        useMaterial3: true,
-      ),
-      home: HomeScreen(
-        key: _home,
-        controller: widget.controller,
-        onOpenKitchen: () => unawaited(_openKitchen()),
+    final app = RecipeAiScope(
+      session: _aiSession,
+      child: MaterialApp(
+        navigatorKey: _navigator,
+        title: 'Recipe Cooking Navigator',
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('ja', 'JP'),
+        supportedLocales: const [Locale('ja', 'JP')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: RecipeTheme.light,
+        home: HomeScreen(
+          key: _home,
+          controller: widget.controller,
+          onOpenKitchen: () => unawaited(_openKitchen()),
+        ),
       ),
     );
     return widget.preferences == null
