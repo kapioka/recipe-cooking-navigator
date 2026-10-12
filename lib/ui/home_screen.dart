@@ -93,9 +93,10 @@ class HomeScreenState extends State<HomeScreen> {
                           ),
                           Wrap(
                             spacing: 8,
+                            runSpacing: 8,
                             children: [
                               if (!KitchenScope.contains(context))
-                                TextButton.icon(
+                                OutlinedButton.icon(
                                   key: const Key('open_kitchen'),
                                   onPressed:
                                       widget.onOpenKitchen ??
@@ -109,34 +110,16 @@ class HomeScreenState extends State<HomeScreen> {
                                   icon: const Icon(Icons.kitchen_outlined),
                                   label: const Text('キッチンツールを開く'),
                                 ),
-                              PopupMenuButton<String>(
+                              OutlinedButton.icon(
                                 key: const Key('open_recipe_archive'),
-                                tooltip: '表示するレシピ',
-                                onSelected: (value) {
-                                  if (value == 'archive') {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => _ArchiveScreen(
-                                          controller: controller,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                    value: 'saved',
-                                    child: Text('保存中'),
+                                onPressed: () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        _ArchiveScreen(controller: controller),
                                   ),
-                                  PopupMenuItem(
-                                    value: 'archive',
-                                    child: Text('アーカイブ'),
-                                  ),
-                                ],
-                                child: const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: Text('表示: 保存中 ▾'),
                                 ),
+                                icon: const Icon(Icons.archive_outlined),
+                                label: const Text('アーカイブ'),
                               ),
                             ],
                           ),

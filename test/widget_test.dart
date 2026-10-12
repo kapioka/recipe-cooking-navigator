@@ -113,7 +113,9 @@ void main() {
     await tester.pumpWidget(RecipeCookingNavigatorApp(controller: controller));
     expect(find.text('豚の生姜焼き'), findsOneWidget);
     expect(find.text('キッチンツールを開く'), findsOneWidget);
-    expect(find.text('表示: 保存中 ▾'), findsOneWidget);
+    expect(find.text('表示: 保存中 ▾'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'キッチンツールを開く'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'アーカイブ'), findsOneWidget);
 
     await tester.tap(find.byTooltip('レシピの操作'));
     await tester.pumpAndSettle();
@@ -123,8 +125,6 @@ void main() {
     expect(controller.archivedRecipes, hasLength(1));
 
     await tester.tap(find.byKey(const Key('open_recipe_archive')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('アーカイブ'));
     await tester.pumpAndSettle();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
     await tester.tap(find.byTooltip('アーカイブの操作'));
@@ -141,8 +141,6 @@ void main() {
     await tester.tap(find.text('アーカイブへ移す'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open_recipe_archive')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('アーカイブ'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('アーカイブの操作'));
     await tester.pumpAndSettle();
@@ -1448,8 +1446,6 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open_recipe_archive')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('アーカイブ'));
     await tester.pumpAndSettle();
     expect(find.text('豚の生姜焼き'), findsOneWidget);
     expect(find.byTooltip('アーカイブの操作').hitTestable(), findsOneWidget);
