@@ -15,6 +15,8 @@ import 'kitchen_scope.dart';
 import 'preference_scope.dart';
 import 'preference_screen.dart';
 import 'recipe_photo_avatar.dart';
+import 'recipe_difficulty_meter.dart';
+import 'feedback_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.controller, this.onOpenKitchen, super.key});
@@ -713,12 +715,11 @@ class _RecipeCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${recipe.servings}人分 ・ ${recipe.totalTimeMinutes}分 ・ '
-                'AIの難易度目安: ${recipe.estimatedDifficulty}/5',
-              ),
+              Text('${recipe.servings}人分 ・ ${recipe.totalTimeMinutes}分'),
+              const SizedBox(height: 6),
+              RecipeDifficultyMeter(difficulty: recipe.estimatedDifficulty),
               if (!controller.isLatestRevision(recipe.id, recipe.revision))
-                const Text('新しい版があります'),
+                const Text('新しいバージョンがあります'),
               if (tags.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Wrap(
@@ -740,6 +741,17 @@ class _RecipeCard extends StatelessWidget {
         trailing: PopupMenuButton<String>(
           tooltip: 'レシピの操作',
           onSelected: (value) async {
+            if (value == 'feedback') {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FeedbackScreen(
+                    recipeId: recipe.id,
+                    controller: controller,
+                  ),
+                ),
+              );
+              return;
+            }
             if (value == 'latest') {
               final latest = controller.latestRecipeFor(recipe.id);
               if (latest == null) {
@@ -768,6 +780,11 @@ class _RecipeCard extends StatelessWidget {
             }
           },
           itemBuilder: (_) => [
+            PopupMenuItem<String>(
+              key: Key('recipe_feedback_${recipe.id}'),
+              value: 'feedback',
+              child: const Text('調理後の評価'),
+            ),
             PopupMenuItem<String>(
               key: Key('activate_latest_recipe_${recipe.id}'),
               value: 'latest',

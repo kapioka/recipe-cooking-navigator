@@ -385,7 +385,7 @@ void main() {
       await tester.tap(find.byKey(const Key('connected_ai_save')));
       await tester.pumpAndSettle();
       expect(find.text('改善したレシピ'), findsOneWidget);
-      expect(find.text('表示中の版 ${recipe['revision']}'), findsOneWidget);
+      expect(find.text('表示中のバージョン ${recipe['revision']}'), findsOneWidget);
       expect(
         library.activeRecipeFor(recipe['id'] as String)!.revision,
         recipe['parent_revision'],

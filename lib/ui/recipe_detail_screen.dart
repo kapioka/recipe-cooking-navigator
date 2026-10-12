@@ -6,6 +6,7 @@ import 'cooking_entry.dart';
 import 'feedback_screen.dart';
 import 'recipe_section.dart';
 import 'recipe_theme.dart';
+import 'recipe_difficulty_meter.dart';
 import 'recipe_version_history_screen.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
@@ -170,40 +171,69 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   ),
                   const SizedBox(height: 12),
                   Wrap(
-                    spacing: 8,
+                    spacing: 16,
                     runSpacing: 8,
                     children: [
-                      Chip(
+                      Text(
+                        '$selectedServings人分',
                         key: const Key('selected_servings_chip'),
-                        label: Text('$selectedServings人分'),
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
-                      Chip(
-                        label: Text(
-                          '目安${activeRecipe.totalTimeMinutes}分（基準${activeRecipe.servings}人分）',
-                        ),
-                      ),
-                      Chip(
-                        label: Text(
-                          'AI想定難易度 ${activeRecipe.estimatedDifficulty}',
-                        ),
-                      ),
-                      Chip(
-                        key: const Key('active_recipe_version_chip'),
-                        label: Text(
-                          controller.isActiveRevision(
-                                activeRecipe.id,
-                                activeRecipe.revision,
-                              )
-                              ? '使用中の版 ${activeRecipe.revision}'
-                              : '表示中の版 ${activeRecipe.revision}',
-                        ),
-                      ),
-                      if (latestRecipe != null &&
-                          latestRecipe.revision != activeRecipe.revision)
-                        Chip(label: Text('最新の版 ${latestRecipe.revision}')),
+                      Text('調理時間目安 ${activeRecipe.totalTimeMinutes}分'),
                     ],
                   ),
                   const SizedBox(height: 12),
+                  RecipeDifficultyMeter(
+                    difficulty: activeRecipe.estimatedDifficulty,
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        controller.isActiveRevision(
+                              activeRecipe.id,
+                              activeRecipe.revision,
+                            )
+                            ? '使用中のバージョン ${activeRecipe.revision}'
+                            : '表示中のバージョン ${activeRecipe.revision}',
+                        key: const Key('active_recipe_version_chip'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (latestRecipe != null &&
+                          latestRecipe.revision != activeRecipe.revision)
+                        Text(
+                          '最新のバージョン ${latestRecipe.revision}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('open_version_history'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RecipeVersionHistoryScreen(
+                          recipeId: activeRecipe.id,
+                          controller: controller,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.history),
+                    label: Text('バージョン履歴（${revisions.length}件）'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              RecipeSection(
+                children: [
+                  Text(
+                    '調理する人数',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
                   Semantics(
                     label: '調理人数、現在$selectedServings人分',
                     child: Row(
@@ -254,74 +284,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                         : '材料を$selectedServings人分に換算しています。加熱時間・火加減・器具は自動調整されません。\n${activeRecipe.servingAdjustmentNote}',
                     key: const Key('serving_adjustment_note'),
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    key: const Key('open_version_history'),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => RecipeVersionHistoryScreen(
-                          recipeId: activeRecipe.id,
-                          controller: controller,
-                        ),
-                      ),
-                    ),
-                    icon: const Icon(Icons.history),
-                    label: Text('Version履歴（${revisions.length}件）'),
-                  ),
                 ],
               ),
-              const SizedBox(height: 24),
-              CookingEntry(
-                key: ValueKey('${activeRecipe.id}:${activeRecipe.revision}'),
-                recipe: activeRecipe,
-                controller: controller,
-                cookingContext: cookingContext,
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                key: const Key('open_feedback'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => FeedbackScreen(
-                      recipeId: activeRecipe.id,
-                      controller: controller,
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.rate_review_outlined),
-                label: const Text('調理後の評価・ChatGPTで改善'),
-              ),
-              const SizedBox(height: 16),
-              RecipeSection(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'タグ',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _editTags(context),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('編集'),
-                      ),
-                    ],
-                  ),
-                  if (tags.isEmpty)
-                    const Text('タグはまだありません')
-                  else
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: tags
-                          .map((tag) => Chip(label: Text(tag)))
-                          .toList(growable: false),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               RecipeSection(
                 children: [
                   Text('材料', style: Theme.of(context).textTheme.titleLarge),
@@ -440,7 +405,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           child: const Text('チェックをリセット'),
                         ),
                       ),
-                    const Text('チェックはこのVersionに保存されます。次回の調理前に再確認してください。'),
+                    const Text('チェックはこのバージョンに保存されます。次回の調理前に再確認してください。'),
                   ],
                 ),
               ],
@@ -472,6 +437,57 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              RecipeSection(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'タグ',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _editTags(context),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('編集'),
+                      ),
+                    ],
+                  ),
+                  if (tags.isEmpty)
+                    const Text('タグはまだありません')
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: tags
+                          .map((tag) => Chip(label: Text(tag)))
+                          .toList(growable: false),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              CookingEntry(
+                key: ValueKey('${activeRecipe.id}:${activeRecipe.revision}'),
+                recipe: activeRecipe,
+                controller: controller,
+                cookingContext: cookingContext,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('open_feedback'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => FeedbackScreen(
+                      recipeId: activeRecipe.id,
+                      controller: controller,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.rate_review_outlined),
+                label: const Text('調理後の評価・ChatGPTで改善'),
               ),
             ],
           ),

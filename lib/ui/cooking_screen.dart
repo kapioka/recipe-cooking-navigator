@@ -11,8 +11,6 @@ import '../platform/cooking_device.dart';
 import 'kitchen_scope.dart';
 import 'recipe_theme.dart';
 
-enum _CookingMenuAction { complete, help }
-
 class CookingScreen extends StatefulWidget {
   const CookingScreen({
     required this.recipe,
@@ -1179,48 +1177,10 @@ class _CookingScreenState extends State<CookingScreen> {
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             actions: [
-              PopupMenuButton<_CookingMenuAction>(
-                tooltip: 'その他の操作',
-                onSelected: (action) {
-                  switch (action) {
-                    case _CookingMenuAction.complete:
-                      _exit(true);
-                    case _CookingMenuAction.help:
-                      _help();
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: _CookingMenuAction.complete,
-                    height: 72,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.check_circle_outline, size: 30),
-                      title: Text(
-                        '調理を完了',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _CookingMenuAction.help,
-                    height: 72,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.help_outline, size: 30),
-                      title: Text(
-                        '画面操作の説明',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              IconButton(
+                tooltip: '画面操作の説明',
+                onPressed: _help,
+                icon: const Icon(Icons.help_outline),
               ),
             ],
           ),
@@ -1570,24 +1530,34 @@ class _CookingScreenState extends State<CookingScreen> {
                             filled: true,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _controlButton(
-                            key: const Key('screen_controls_button'),
-                            label: '操作方法',
-                            icon: Icons.touch_app_outlined,
-                            onPressed: _help,
-                            soft: true,
+                        if (index < steps.length - 1) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _controlButton(
+                              key: const Key('screen_controls_button'),
+                              label: '操作方法',
+                              icon: Icons.touch_app_outlined,
+                              onPressed: _help,
+                              soft: true,
+                            ),
                           ),
-                        ),
+                        ],
                         const SizedBox(width: 10),
                         Expanded(
                           child: _controlButton(
-                            key: const Key('next_step_button'),
-                            label: '次へ',
-                            icon: Icons.arrow_forward,
-                            onPressed: busy || index == steps.length - 1
+                            key: Key(
+                              index == steps.length - 1
+                                  ? 'complete_cooking'
+                                  : 'next_step_button',
+                            ),
+                            label: index == steps.length - 1 ? '調理完了' : '次へ',
+                            icon: index == steps.length - 1
+                                ? Icons.check_circle_outline
+                                : Icons.arrow_forward,
+                            onPressed: busy
                                 ? null
+                                : index == steps.length - 1
+                                ? () => _exit(true)
                                 : () => _move(index + 1),
                             filled: true,
                           ),
