@@ -186,7 +186,7 @@ Recipe Cooking Navigatorは以下を行いません。
 
 FlutterによるAndroid版を実装済みです。現行版はRecipe / Feedback Schema v2に対応し、人数変更、Version履歴、調理後評価・Feedback共有・改善依頼、Kitchen、料理の好みの記録を実装しています。公開ChatGPT Project Packageのv2契約を照合した正式署名APKを配布します。
 
-Sign in with ChatGPTは本体へ統合済みで、Pixel 10aで認証、レシピ生成、確認・保存を確認しています。PoCは開発用の独立プロジェクトとして残していますが、本体の利用に別のPoCアプリは不要です。今回の画面更新はunit / widget tests、静的解析、正式署名buildで検証しています。各画面の見た目と写真選択・切り抜きの実機操作は、利用者による最終確認が残っています。
+Sign in with ChatGPTは本体へ統合済みで、Pixel 10aで認証、レシピ生成、確認・保存を確認しています。PoCは開発用の独立プロジェクトとして残していますが、本体の利用に別のPoCアプリは不要です。今回の画面更新はunit / widget tests、静的解析、正式署名buildで検証しています。写真選択・切り抜き・一覧への反映も利用者と実機で確認しました。各画面の最終的な見た目と写真表示の微調整は、利用者による確認が残っています。
 
 SNS共有素材、ファイルによるバックアップ、iOS版は未実装です。調理雑音下での音声認識精度、TalkBack、長時間点灯、Kitchenの背景動作、Profileの実運用は未確認です。
 

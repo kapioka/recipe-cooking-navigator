@@ -144,11 +144,16 @@ class _RecipePhotoAvatarState extends State<RecipePhotoAvatar> {
                       )
                     : bytes == null
                     ? _placeholder(context)
-                    : Image.memory(
-                        bytes,
-                        fit: BoxFit.cover,
-                        excludeFromSemantics: true,
-                        errorBuilder: (_, _, _) => _placeholder(context),
+                    : Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: ClipOval(
+                          child: Image.memory(
+                            bytes,
+                            fit: BoxFit.contain,
+                            excludeFromSemantics: true,
+                            errorBuilder: (_, _, _) => _placeholder(context),
+                          ),
+                        ),
                       ),
               ),
             ),

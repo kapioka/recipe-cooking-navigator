@@ -170,14 +170,26 @@ class _RecipePhotoCropScreenState extends State<RecipePhotoCropScreen> {
                                         );
                                     _normalizeCenter();
                                   }),
-                            child: ClipOval(
-                              child: ColoredBox(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                                child: CustomPaint(
-                                  size: Size.square(side),
-                                  painter: _CropPainter(widget.image, _crop),
+                            child: Container(
+                              foregroundDecoration: ShapeDecoration(
+                                shape: CircleBorder(
+                                  side: BorderSide(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: ColoredBox(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  child: CustomPaint(
+                                    size: Size.square(side),
+                                    painter: _CropPainter(widget.image, _crop),
+                                  ),
                                 ),
                               ),
                             ),
