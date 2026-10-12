@@ -104,6 +104,7 @@ class RecipeCreationController extends ChangeNotifier {
       } else {
         preview = prepared.preview;
         candidateConditions = conditions;
+        diagnostic = '受信したレシピ本文: ${source.length}文字';
         stage = RecipeCreationStage.preview;
       }
     } on SiwcFailure catch (error) {
@@ -115,6 +116,10 @@ class RecipeCreationController extends ChangeNotifier {
         SiwcFailureKind.permission => 'このアカウントでは現在作成できません。利用状況を確認してください。',
         SiwcFailureKind.request => '作成の依頼を受け付けられませんでした。別の方法でも作れます。',
         SiwcFailureKind.network => '回答を受け取れませんでした。条件は残っています。送信済みの可能性があります。',
+        SiwcFailureKind.timeout =>
+          '回答の受信が時間切れになりました。条件は残っています。通信を確認するか、モデルを変更して再試行できます。',
+        SiwcFailureKind.responseTooLarge =>
+          '回答の受信量が上限を超えたため中止しました。条件は残っています。改善内容を絞るか、モデルを変更して再試行できます。',
         _ => '作成を完了できませんでした。条件は残っています。',
       };
       stage = RecipeCreationStage.editing;

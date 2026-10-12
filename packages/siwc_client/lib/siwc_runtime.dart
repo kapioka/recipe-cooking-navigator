@@ -469,11 +469,11 @@ class SiwcRuntime {
     } catch (error) {
       throw SiwcFailure(
         '$stage: ${safeNetworkFailure(error)}',
-        kind:
-            error is SocketException ||
-                error is TimeoutException ||
-                error is HandshakeException ||
-                error is HttpException
+        kind: error is TimeoutException
+            ? SiwcFailureKind.timeout
+            : error is SocketException ||
+                  error is HandshakeException ||
+                  error is HttpException
             ? SiwcFailureKind.network
             : SiwcFailureKind.unknown,
       );

@@ -141,13 +141,21 @@ void main() {
         })}\n\n';
     for (final example in [(201, 'text/event-stream'), (200, null)]) {
       final client = TestClient(TestResponse(example.$1, example.$2, body));
-      final network = HttpSiwcNetwork(client: client);
+      final diagnostics = <String>[];
+      final network = HttpSiwcNetwork(
+        client: client,
+        onDiagnostic: diagnostics.add,
+      );
       expect(
         await network.infer('fake-access', inferenceBody('detected', '確認済み')),
         'completed',
       );
       final request = client.lastRequest!;
       expect(request.contentLength, request.payload!.length);
+      expect(diagnostics, [
+        'RCN_AI_SEND bytes=${request.payload!.length}',
+        'RCN_AI_RECEIVE stream_chars=${body.split('\n').map((line) => line.length).reduce((a, b) => a + b)} text_chars=9',
+      ]);
       expect((jsonDecode(utf8.decode(request.payload!)) as Map)['input'], [
         {'role': 'user', 'content': '確認済み'},
       ]);

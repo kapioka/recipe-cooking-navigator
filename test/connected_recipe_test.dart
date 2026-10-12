@@ -142,7 +142,6 @@ void main() {
     ) as Map<String, dynamic>;
     prompt = AiRecipePrompt(
       recipeSchema: schema,
-      feedbackSchema: feedbackSchema,
       generateWorkflow: await File('ai/workflows/generate.md').readAsString(),
       improveWorkflow: await File('ai/workflows/improve.md').readAsString(),
       integration: await File('docs/chatgpt-integration.md').readAsString(),
@@ -160,31 +159,45 @@ void main() {
     );
     await library.load();
   });
-  test(
-    'direct prompt carries canonical schema and only selected request data',
-    () {
-      final text = prompt.build(request, '編集後の希望');
-      expect(text.instructions, contains(schema));
-      expect(text.instructions, isNot(contains('編集後の希望')));
-      expect(text.input, contains('"confirmed_request":"編集後の希望"'));
-      expect(text.input, isNot(contains('selected_feedback')));
-      expect(() => prompt.build(request, ' '), throwsFormatException);
-      final improvement = AiRecipeRequest.improve(
-        feedback: feedback,
-        validator: FeedbackValidator.fromSchemaStrings(
-          feedbackSchemaSource: feedbackSchema,
-          recipeSchemaSource: schema,
-        ),
-      );
-      final improvementText = prompt.build(improvement, '追加の希望');
-      expect(improvementText.input, contains(jsonEncode(feedback)));
-      expect(
-        improvementText.instructions,
-        isNot(contains(jsonEncode(feedback))),
-      );
-      expect(improvementText.instructions, contains('next_revision'));
-    },
-  );
+  test('direct prompt carries canonical schema and only selected request data', () {
+    final text = prompt.build(request, '編集後の希望');
+    expect(text.instructions, contains(jsonEncode(jsonDecode(schema))));
+    expect(text.instructions, isNot(contains('Google Drive Recipe Inbox')));
+    expect(text.instructions, contains('食品安全'));
+    expect(text.instructions, isNot(contains('編集後の希望')));
+    expect(text.input, contains('"confirmed_request":"編集後の希望"'));
+    expect(text.input, isNot(contains('selected_feedback')));
+    expect(() => prompt.build(request, ' '), throwsFormatException);
+    final improvement = AiRecipeRequest.improve(
+      feedback: feedback,
+      validator: FeedbackValidator.fromSchemaStrings(
+        feedbackSchemaSource: feedbackSchema,
+        recipeSchemaSource: schema,
+      ),
+    );
+    final improvementText = prompt.build(improvement, '追加の希望');
+    expect(improvementText.input, contains(jsonEncode(feedback)));
+    expect(improvementText.instructions, isNot(contains(jsonEncode(feedback))));
+    expect(improvementText.instructions, contains('next_revision'));
+    expect(improvementText.instructions, isNot(contains('<feedback_schema>')));
+    expect(
+      improvementText.instructions,
+      isNot(contains('<structural_example_only>')),
+    );
+    final oldInstructionSize =
+        schema.length +
+        feedbackSchema.length +
+        prompt.integration.length +
+        prompt.improveWorkflow.length +
+        prompt.example.length;
+    expect(
+      improvementText.instructions.length,
+      lessThan(oldInstructionSize ~/ 2),
+    );
+    debugPrint(
+      'Improvement instruction chars: $oldInstructionSize -> ${improvementText.instructions.length}',
+    );
+  });
   test(
     'failed answer diagnostics classify format without exposing contents',
     () {

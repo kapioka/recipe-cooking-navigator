@@ -20,6 +20,7 @@ import 'recipe_import_screen.dart';
 import 'recipe_preview_content.dart';
 import 'recipe_creation_progress.dart';
 import 'recipe_theme.dart';
+import 'recipe_section.dart';
 
 class AiRecipeRequestScreen extends StatefulWidget {
   const AiRecipeRequestScreen({
@@ -210,9 +211,6 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
       AiRecipePrompt(
         recipeSchema: await rootBundle.loadString(
           'schemas/recipe-v2.schema.json',
-        ),
-        feedbackSchema: await rootBundle.loadString(
-          'schemas/feedback-v2.schema.json',
         ),
         generateWorkflow: await rootBundle.loadString(
           'ai/workflows/generate.md',
@@ -641,10 +639,17 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
     ),
   );
 
+  String _modelName() {
+    for (final model in _session!.models) {
+      if (model.slug == _session!.model) return model.name;
+    }
+    return _session!.model ?? '未選択';
+  }
+
   Widget _wishes() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _field('instructions', 'その他の希望（任意）'),
+      _field('instructions', _improvement == null ? 'その他の希望（任意）' : '追加の希望（任意）'),
       OutlinedButton.icon(
         key: const Key('connected_ai_dictate'),
         onPressed: !_ready || _busy ? null : _dictate,
@@ -739,6 +744,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                         '経過 ${flow.elapsedSeconds}秒',
                         semanticsLabel: '作成の経過時間',
                       ),
+                      Text('使用モデル: ${_modelName()}'),
                       if (flow.elapsedSeconds >= 30)
                         const Text('時間がかかっています。そのまま待つか、中止できます。'),
                       TextButton(
@@ -762,9 +768,11 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                               color: RecipeTheme.forest,
                             ),
                             title: const Text('ChatGPT 接続済み'),
-                            subtitle: _session!.model == null
-                                ? const Text('使用するモデルを設定してください')
-                                : null,
+                            subtitle: Text(
+                              _session!.model == null
+                                  ? '使用するモデルを設定してください'
+                                  : '使用モデル: ${_modelName()}',
+                            ),
                             trailing: TextButton(
                               onPressed: _busy ? null : _settings,
                               child: const Text('変更'),
@@ -793,11 +801,24 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                         _basicConditions(),
                         _optionalConditions(),
                       ] else ...[
-                        Text(
-                          '改善元: ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['title']}',
-                        ),
-                        Text(
-                          '第${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['revision']}版と選択した評価を添付します。',
+                        RecipeSection(
+                          title: '評価から引き継いだ改善の希望',
+                          icon: Icons.auto_stories_outlined,
+                          color: RecipeTheme.sage,
+                          children: [
+                            Text(
+                              '改善元: ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['title']}（バージョン ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['revision']}）',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              (_improvement!.feedback!['revision_request']
+                                      as Map)['goal']
+                                  as String,
+                              key: const Key('inherited_improvement_goal'),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text('この改善内容と選択した評価を送ります。下の欄では希望を追加できます。'),
+                          ],
                         ),
                       ],
                       if (_improvement != null) _wishes(),

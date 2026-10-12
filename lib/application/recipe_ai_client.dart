@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:siwc_client/siwc_runtime.dart';
 import 'package:siwc_client/siwc_network.dart';
 
@@ -26,7 +27,7 @@ class AndroidRecipeAiClient implements RecipeAiClient {
   AndroidRecipeAiClient()
     : _runtime = SiwcRuntime(
         _Platform(),
-        HttpSiwcNetwork(),
+        HttpSiwcNetwork(onDiagnostic: (message) => debugPrint(message)),
         returnScheme: 'rcn-siwc',
         returnPackage: 'com.kapioka.recipe_cooking_navigator',
         returnAppName: 'Recipe Cooking Navigator',

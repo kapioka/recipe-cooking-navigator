@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:siwc_client/siwc_contract.dart';
 import 'package:recipe_cooking_navigator/application/recipe_ai_client.dart';
 import 'package:recipe_cooking_navigator/application/recipe_ai_session.dart';
 import 'package:recipe_cooking_navigator/application/recipe_creation_controller.dart';
@@ -26,6 +27,8 @@ import 'package:recipe_cooking_navigator/ui/recipe_ai_settings_screen.dart';
 class _Client implements RecipeAiClient {
   bool enabled = true;
   String answer = '';
+  String? sentInput;
+  Object? failure;
   int calls = 0;
   Completer<String>? pending;
   @override
@@ -61,6 +64,8 @@ class _Client implements RecipeAiClient {
     required String instructions,
   }) async {
     calls++;
+    sentInput = input;
+    if (failure != null) throw failure!;
     return pending?.future ?? answer;
   }
 
@@ -130,7 +135,6 @@ void main() {
   );
   const prompt = AiRecipePrompt(
     recipeSchema: '',
-    feedbackSchema: '',
     generateWorkflow: '',
     improveWorkflow: '',
     integration: '',
@@ -380,8 +384,27 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final goal = (feedback['revision_request'] as Map)['goal'];
+      expect(find.text(goal as String), findsOneWidget);
+      expect(find.text('評価から引き継いだ改善の希望'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('connected_ai_text')),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.byKey(const Key('connected_ai_text')),
+        '洗い物を少なく',
+      );
       await tester.tap(find.byKey(const Key('connected_ai_send')));
       await tester.pumpAndSettle();
+      final sent = jsonDecode(client.sentInput!) as Map;
+      expect(
+        (sent['selected_feedback']['revision_request'] as Map)['goal'],
+        goal,
+      );
+      expect(sent['selected_feedback'], feedback);
+      expect(sent['confirmed_request'], contains('洗い物を少なく'));
       await tester.tap(find.byKey(const Key('connected_ai_save')));
       await tester.pumpAndSettle();
       expect(find.text('改善したレシピ'), findsOneWidget);
@@ -391,6 +414,29 @@ void main() {
         recipe['parent_revision'],
       );
       expect(store.docs, hasLength(2));
+    },
+  );
+
+  test(
+    'receive limit and timeout failures preserve the request without saving',
+    () async {
+      for (final kind in [
+        SiwcFailureKind.responseTooLarge,
+        SiwcFailureKind.timeout,
+      ]) {
+        client.failure = SiwcFailure('safe diagnosis', kind: kind);
+        await session.initialize();
+        await flow.generate(request, request.directText, () async => prompt);
+        expect(flow.stage, RecipeCreationStage.editing);
+        expect(flow.failureKind, kind);
+        expect(
+          flow.message,
+          contains(kind == SiwcFailureKind.timeout ? '時間切れ' : '受信量が上限'),
+        );
+        expect(flow.diagnostic, 'safe diagnosis');
+        expect(store.docs, isEmpty);
+        expect(store.calls, 0);
+      }
     },
   );
 
@@ -503,6 +549,11 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('ai_食材')),
+            200,
+            scrollable: find.byType(Scrollable).first,
+          );
           await tester.enterText(find.byKey(const Key('ai_食材')), 'なす');
           tester.view.viewInsets = const FakeViewPadding(bottom: 280);
           await tester.pump();
