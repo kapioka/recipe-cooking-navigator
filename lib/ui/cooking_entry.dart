@@ -6,6 +6,8 @@ import '../domain/recipe_document.dart';
 import '../domain/cooking_context.dart';
 import 'cooking_screen.dart';
 import 'kitchen_scope.dart';
+import 'recipe_section.dart';
+import 'recipe_theme.dart';
 
 class CookingEntry extends StatefulWidget {
   const CookingEntry({
@@ -72,7 +74,7 @@ class _CookingEntryState extends State<CookingEntry> {
                       index == null ||
                       index < 0 ||
                       !snapshotMatches)
-              ? '保存したVersionまたは工程が見つかりません。「最初から」で開始方法を選べます。'
+              ? '保存したバージョンまたは工程が見つかりません。「最初から」で開始方法を選べます。'
               : null;
           unreadable = false;
           loading = false;
@@ -97,7 +99,7 @@ class _CookingEntryState extends State<CookingEntry> {
         builder: (context) => AlertDialog(
           title: const Text('最初から始めますか？'),
           content: Text(
-            'Version ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の先頭から開始します。現在の途中位置を更新します。',
+            'バージョン ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の先頭から開始します。現在の途中位置を更新します。',
           ),
           actions: [
             TextButton(
@@ -157,10 +159,13 @@ class _CookingEntryState extends State<CookingEntry> {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+  Widget build(BuildContext context) => RecipeSection(
+    title: '調理へ進む',
+    icon: Icons.restaurant_menu_outlined,
+    titleStyle: RecipeTheme.readingHeading,
+    color: RecipeTheme.sage,
+    children: [
+      Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (KitchenScope.contains(context))
@@ -179,16 +184,18 @@ class _CookingEntryState extends State<CookingEntry> {
               savedIndex != null &&
               savedIndex! >= 0) ...[
             Text(
-              '調理途中です・Version ${savedRecipe!.revision}・${savedContext!.targetServings}人分',
+              '調理途中です・バージョン ${savedRecipe!.revision}・${savedContext!.targetServings}人分',
             ),
             Text(
               '工程 ${savedIndex! + 1} / ${savedRecipe!.steps.length} ${savedRecipe!.steps[savedIndex!]['title']}',
             ),
+            const SizedBox(height: 12),
             FilledButton(
               key: const Key('resume_cooking'),
               onPressed: busy ? null : () => _start(true),
               child: const Text('続きから'),
             ),
+            const SizedBox(height: 8),
           ],
           if (unreadable)
             TextButton(onPressed: _load, child: const Text('再読み込み'))
@@ -200,6 +207,6 @@ class _CookingEntryState extends State<CookingEntry> {
             ),
         ],
       ),
-    ),
+    ],
   );
 }

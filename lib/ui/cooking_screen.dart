@@ -1319,12 +1319,7 @@ class _CookingScreenState extends State<CookingScreen> {
                               Text(
                                 step['title'] as String,
                                 key: const Key('cooking_step_title'),
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  height: 1.25,
-                                  fontWeight: FontWeight.w700,
-                                  color: RecipeTheme.ink,
-                                ),
+                                style: RecipeTheme.cookingStepTitle,
                               ),
                               const SizedBox(height: 18),
                               Text(

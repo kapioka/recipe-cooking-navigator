@@ -78,7 +78,7 @@ class AiRecipeRequest {
       '公開AI入口: $publicAiRouterUrl\n'
       '対応Recipe/Feedback Schema: $supportedRecipeSchemaVersion\n'
       '入口から対応Schema、Workflow、連携仕様を取得してください。'
-      '取得・解釈できない、対応版が公開されていない場合は停止し、'
+      '取得・解釈できない、対応バージョンが公開されていない場合は停止し、'
       '互換JSONを推測生成しないでください。\n'
       '成功時はRecipe JSONを1つだけ返してください。説明文を混ぜないでください。';
 

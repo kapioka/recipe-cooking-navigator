@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,95 @@ import 'package:jose/jose.dart';
 import 'package:rcn_siwc_poc/siwc_contract.dart';
 
 void main() {
+  List<String> completedLines(String text) => [
+    'data: ${jsonEncode({
+      'type': 'response.completed',
+      'response': {
+        'status': 'completed',
+        'output': [
+          {
+            'type': 'message',
+            'content': [
+              {'type': 'output_text', 'text': text},
+            ],
+          },
+        ],
+      },
+    })}',
+    '',
+  ];
+
+  test('recipe stream can exceed the old PoC limit without a large answer', () async {
+    final lines = [
+      for (var i = 0; i < 350; i++) ...[
+        'data: ${jsonEncode({'type': 'response.in_progress', 'padding': 'a' * 4096})}',
+        '',
+      ],
+      ...completedLines('completed recipe'),
+    ];
+    expect(lines.join().length, greaterThan(1024 * 1024));
+    expect(
+      await collectCompletedResponse(Stream.fromIterable(lines)),
+      'completed recipe',
+    );
+  });
+
+  test('completed answer returns while the HTTP stream remains open', () async {
+    var cancelled = false;
+    final stream = StreamController<String>(onCancel: () => cancelled = true);
+    final pending = collectCompletedResponse(stream.stream);
+    for (final line in completedLines('completed')) {
+      stream.add(line);
+    }
+    try {
+      expect(await pending.timeout(const Duration(seconds: 1)), 'completed');
+      expect(cancelled, true);
+    } finally {
+      await stream.close();
+    }
+  });
+
+  test(
+    'stream and text budgets remain bounded and never return a partial answer',
+    () async {
+      for (final lines in [
+        ['data: {"type":"response.output_text.delta","delta":"four"}', ''],
+        ['data: {"type":"response.output_text.done","text":"four"}', ''],
+        completedLines('four'),
+      ]) {
+        await expectLater(
+          collectCompletedResponse(Stream.fromIterable(lines), maxTextChars: 3),
+          throwsA(
+            isA<SiwcFailure>().having(
+              (e) => e.kind,
+              'kind',
+              SiwcFailureKind.responseTooLarge,
+            ),
+          ),
+        );
+      }
+      await expectLater(
+        collectCompletedResponse(
+          Stream.fromIterable(completedLines('small')),
+          maxStreamChars: 8,
+        ),
+        throwsA(
+          isA<SiwcFailure>().having(
+            (e) => e.kind,
+            'kind',
+            SiwcFailureKind.responseTooLarge,
+          ),
+        ),
+      );
+      await expectLater(
+        collectCompletedResponse(
+          Stream<String>.error(TimeoutException('secret-request')),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    },
+  );
+
   test(
     'dynamic registration uses stable host/fresh PKCE and exact loopback',
     () {
@@ -273,7 +363,6 @@ void main() {
       ],
       ['data: {"type":"response.incomplete"}', ''],
       ['data: [DONE]', ''],
-      ['data: ${jsonEncode(terminal)}', '', 'data: {"type":"error"}', ''],
     ]) {
       await expectLater(
         collectCompletedResponse(Stream.fromIterable(lines)),

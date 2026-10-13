@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Local conditions only. Credentials and generated answers never enter this file.
+/// Local creation metadata only. Credentials and generated answers never enter this file.
 class RecipeCreationStore {
   RecipeCreationStore([this.file]);
   final File? file;

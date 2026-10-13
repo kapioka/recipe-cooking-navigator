@@ -10,6 +10,37 @@ abstract final class RecipeTheme {
   static const warning = Color(0xFF96361F);
   static const warningSurface = Color(0xFFF8E9DF);
 
+  static const listRecipeTitle = TextStyle(
+    fontSize: 16,
+    height: 1.4,
+    fontWeight: FontWeight.w600,
+    color: ink,
+  );
+  static const detailRecipeTitle = TextStyle(
+    fontSize: 24,
+    height: 1.3,
+    fontWeight: FontWeight.w700,
+    color: ink,
+  );
+  static const cookingStepTitle = TextStyle(
+    fontSize: 32,
+    height: 1.25,
+    fontWeight: FontWeight.w700,
+    color: ink,
+  );
+  static const readingHeading = TextStyle(
+    fontSize: 18,
+    height: 1.4,
+    fontWeight: FontWeight.w600,
+    color: forest,
+  );
+  static const readingBody = TextStyle(fontSize: 17, height: 1.5, color: ink);
+  static const readingNote = TextStyle(
+    fontSize: 14,
+    height: 1.5,
+    color: forest,
+  );
+
   static ThemeData get light {
     final colors = ColorScheme.fromSeed(seedColor: forest).copyWith(
       primary: forest,

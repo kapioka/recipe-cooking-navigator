@@ -74,10 +74,14 @@ abstract class SiwcNetwork {
 }
 
 class HttpSiwcNetwork implements SiwcNetwork {
-  HttpSiwcNetwork({HttpClient? client}) : _client = client ?? HttpClient() {
+  HttpSiwcNetwork({HttpClient? client, this.onDiagnostic})
+    : _client = client ?? HttpClient() {
     _client.connectionTimeout = const Duration(seconds: 20);
   }
   HttpClient _client;
+
+  /// Fixed numeric counters only; never pass a body, token, or account here.
+  final void Function(String)? onDiagnostic;
 
   Future<HttpClientRequest> _open(String method, Uri uri) async {
     if (uri.scheme != 'https' ||
@@ -157,6 +161,7 @@ class HttpSiwcNetwork implements SiwcNetwork {
     request.headers.contentType = ContentType.json;
     request.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
     final payload = utf8.encode(jsonEncode(body));
+    onDiagnostic?.call('RCN_AI_SEND bytes=${payload.length}');
     request.contentLength = payload.length;
     request.add(payload);
     final response = await request.close().timeout(const Duration(seconds: 30));
@@ -183,6 +188,9 @@ class HttpSiwcNetwork implements SiwcNetwork {
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .timeout(const Duration(seconds: 40)),
+        onCompleted: (streamChars, textChars) => onDiagnostic?.call(
+          'RCN_AI_RECEIVE stream_chars=$streamChars text_chars=$textChars',
+        ),
       ).timeout(const Duration(minutes: 2));
     } catch (_) {
       cancel();

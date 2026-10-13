@@ -12,7 +12,15 @@ const resource = 'https://api.openai.com/v1';
 const scopes =
     'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct';
 
-enum SiwcFailureKind { unknown, authentication, permission, request, network }
+enum SiwcFailureKind {
+  unknown,
+  authentication,
+  permission,
+  request,
+  network,
+  timeout,
+  responseTooLarge,
+}
 
 class SiwcFailure implements Exception {
   const SiwcFailure(this.message, {this.kind = SiwcFailureKind.unknown});
@@ -176,12 +184,32 @@ Map<String, dynamic> inferenceBody(
 
 /// Never return a partial result as success. Supports multiline SSE data and
 /// requires a completed response object, rather than an HTTP 200 or [DONE].
-Future<String> collectCompletedResponse(Stream<String> lines) async {
+Future<String> collectCompletedResponse(
+  Stream<String> lines, {
+  int maxStreamChars = 16 * 1024 * 1024,
+  int maxTextChars = 1024 * 1024,
+  void Function(int streamChars, int textChars)? onCompleted,
+}) async {
   final data = <String>[];
   final streamedText = StringBuffer();
   final doneText = <String>[];
   String? completedText;
   var received = 0;
+  var doneTextLength = 0;
+  String finish() {
+    onCompleted?.call(received, completedText!.length);
+    return completedText!;
+  }
+
+  void checkTextLength(int length) {
+    if (length > maxTextChars) {
+      throw const SiwcFailure(
+        '回答本文がアプリで扱える上限を超えました。',
+        kind: SiwcFailureKind.responseTooLarge,
+      );
+    }
+  }
+
   void consume() {
     if (data.isEmpty) return;
     final raw = data.join('\n');
@@ -192,11 +220,14 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
     if (type == 'response.output_text.delta') {
       final delta = event['delta'];
       if (delta is! String) throw const SiwcFailure('回答テキストのイベント形式が不正です。');
+      checkTextLength(streamedText.length + delta.length);
       streamedText.write(delta);
     }
     if (type == 'response.output_text.done') {
       final text = event['text'];
       if (text is! String) throw const SiwcFailure('確定テキストのイベント形式が不正です。');
+      doneTextLength += text.length;
+      checkTextLength(doneTextLength);
       doneText.add(text);
     }
     if (type == 'error' ||
@@ -234,6 +265,7 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
           : doneText.isNotEmpty
           ? doneText.join()
           : streamedText.toString();
+      checkTextLength(completedText!.length);
       if (completedText!.trim().isEmpty) {
         throw SiwcFailure(
           '完了応答にテキストがありません。（出力項目: ${(response['output'] as List).length} / 受信文字: ${streamedText.length}）',
@@ -245,9 +277,17 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
   try {
     await for (final line in lines) {
       received += line.length;
-      if (received > 1024 * 1024) throw const SiwcFailure('PoC応答の上限を超えました。');
+      if (received > maxStreamChars) {
+        throw const SiwcFailure(
+          '回答の受信量がアプリで扱える上限を超えました。',
+          kind: SiwcFailureKind.responseTooLarge,
+        );
+      }
       if (line.isEmpty) {
         consume();
+        // response.completed is terminal. Do not wait for the HTTP connection
+        // to close, which can discard a valid answer on an idle timeout.
+        if (completedText != null) return finish();
       } else if (line.startsWith('data:')) {
         data.add(line.substring(5).trimLeft());
       }
@@ -257,8 +297,11 @@ Future<String> collectCompletedResponse(Stream<String> lines) async {
       if (received == 0) throw const SiwcFailure('回答の本文が空でした。完了回答は受信していません。');
       throw const SiwcFailure('response.completedを受信できませんでした。');
     }
-    return completedText!;
+    return finish();
   } on SiwcFailure {
+    rethrow;
+  } on TimeoutException {
+    // Preserve transport timeouts so runtime can classify them safely.
     rethrow;
   } catch (_) {
     throw const SiwcFailure('応答形式またはストリームが不正です。');
