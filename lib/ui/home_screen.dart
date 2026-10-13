@@ -15,6 +15,7 @@ import 'kitchen_scope.dart';
 import 'preference_scope.dart';
 import 'preference_screen.dart';
 import 'recipe_photo_avatar.dart';
+import 'recipe_theme.dart';
 import 'recipe_difficulty_meter.dart';
 import 'feedback_screen.dart';
 
@@ -689,10 +690,7 @@ class _RecipeCard extends StatelessWidget {
           recipeId: recipe.id,
           recipeTitle: recipe.title,
         ),
-        title: Text(
-          recipe.title,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        title: Text(recipe.title, style: RecipeTheme.listRecipeTitle),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Column(

@@ -6,6 +6,8 @@ import '../domain/recipe_document.dart';
 import '../domain/cooking_context.dart';
 import 'cooking_screen.dart';
 import 'kitchen_scope.dart';
+import 'recipe_section.dart';
+import 'recipe_theme.dart';
 
 class CookingEntry extends StatefulWidget {
   const CookingEntry({
@@ -157,10 +159,13 @@ class _CookingEntryState extends State<CookingEntry> {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+  Widget build(BuildContext context) => RecipeSection(
+    title: '調理へ進む',
+    icon: Icons.restaurant_menu_outlined,
+    titleStyle: RecipeTheme.readingHeading,
+    color: RecipeTheme.sage,
+    children: [
+      Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (KitchenScope.contains(context))
@@ -184,11 +189,13 @@ class _CookingEntryState extends State<CookingEntry> {
             Text(
               '工程 ${savedIndex! + 1} / ${savedRecipe!.steps.length} ${savedRecipe!.steps[savedIndex!]['title']}',
             ),
+            const SizedBox(height: 12),
             FilledButton(
               key: const Key('resume_cooking'),
               onPressed: busy ? null : () => _start(true),
               child: const Text('続きから'),
             ),
+            const SizedBox(height: 8),
           ],
           if (unreadable)
             TextButton(onPressed: _load, child: const Text('再読み込み'))
@@ -200,6 +207,6 @@ class _CookingEntryState extends State<CookingEntry> {
             ),
         ],
       ),
-    ),
+    ],
   );
 }

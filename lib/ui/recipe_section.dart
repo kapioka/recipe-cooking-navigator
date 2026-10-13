@@ -8,6 +8,7 @@ class RecipeSection extends StatelessWidget {
     required this.children,
     this.title,
     this.icon,
+    this.titleStyle,
     this.color = Colors.white,
     this.padding = const EdgeInsets.all(16),
     this.margin = const EdgeInsets.only(bottom: 16),
@@ -17,6 +18,7 @@ class RecipeSection extends StatelessWidget {
   final List<Widget> children;
   final String? title;
   final IconData? icon;
+  final TextStyle? titleStyle;
   final Color color;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry margin;
@@ -45,8 +47,9 @@ class RecipeSection extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title!,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
+                        style:
+                            titleStyle ??
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
                               color: RecipeTheme.forest,
                               fontWeight: FontWeight.w600,
                             ),
