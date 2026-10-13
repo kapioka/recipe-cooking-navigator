@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../domain/recipe_text_diff.dart';
 import 'recipe_theme.dart';
 
-/// Highlight only changed words; unchanged sentences retain their normal style.
+/// Highlight changed phrases/values; shared text retains its normal style.
 class RecipeComparedText extends StatelessWidget {
   const RecipeComparedText({
     required this.text,

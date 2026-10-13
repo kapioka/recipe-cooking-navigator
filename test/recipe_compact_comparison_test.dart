@@ -57,6 +57,48 @@ void main() {
     home: Scaffold(body: ListView(children: [child])),
   );
 
+  for (final baseline in [false, true]) {
+    testWidgets('advice renders one continuous highlight, baseline=$baseline', (
+      tester,
+    ) async {
+      const original = '味が薄い\n塩やしょうゆを少しずつ足す';
+      const revised = '味が薄い\nしょうゆを少量ずつ追加する';
+      await tester.pumpWidget(
+        app(
+          RecipeComparedText(
+            text: baseline ? original : revised,
+            before: baseline ? revised : original,
+            compared: true,
+            baseline: baseline,
+          ),
+        ),
+      );
+      final rendered = tester.widget<Text>(
+        find.descendant(
+          of: find.byType(RecipeComparedText),
+          matching: find.byType(Text),
+        ),
+      );
+      final span = rendered.textSpan! as TextSpan;
+      final children = span.children!.cast<TextSpan>().toList();
+      expect(children.first.text, '味が薄い\n');
+      expect(children.first.style?.backgroundColor, isNull);
+      final highlighted = children
+          .where((part) => part.style?.backgroundColor != null)
+          .toList();
+      expect(highlighted, hasLength(1));
+      expect(
+        highlighted.single.text,
+        baseline ? '塩やしょうゆを少しずつ足す' : 'しょうゆを少量ずつ追加する',
+      );
+      expect(
+        highlighted.single.style!.backgroundColor,
+        baseline ? const Color(0xFFF4E4E2) : RecipeTheme.sage,
+      );
+      expect(span.toPlainText(), baseline ? original : revised);
+    });
+  }
+
   testWidgets(
     'compact rows keep long text and previous values behind explicit details',
     (tester) async {

@@ -9,8 +9,15 @@ class RecipeTextFragment {
 /// Exact, bounded text comparison. The full text is always preserved.
 class RecipeTextDiff {
   RecipeTextDiff(String before, String after) {
-    // Keep numbers together so 120 -> 150 highlights the whole value.
-    final tokenPattern = RegExp(r'[0-9]+|[^0-9]', unicode: true);
+    // Compare readable phrases rather than coincidentally matching characters
+    // inside Japanese words. Boundaries preserve punctuation/line breaks, and
+    // numeric values remain independent so a quantity-only edit stays narrow.
+    final tokenPattern = RegExp(
+      r'[0-9０-９]+(?:[.．][0-9０-９]+)*|'
+      r'[^0-9０-９\s、。，．！？!?：:；;（）()\[\]「」『』【】・/／]+|'
+      r'[\s、。，．！？!?：:；;（）()\[\]「」『』【】・/／]',
+      unicode: true,
+    );
     List<String> tokens(String text) => [
       for (final match in tokenPattern.allMatches(text)) match.group(0)!,
     ];
