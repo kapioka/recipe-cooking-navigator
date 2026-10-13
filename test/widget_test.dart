@@ -29,6 +29,7 @@ import 'package:recipe_cooking_navigator/ui/recipe_version_history_screen.dart';
 import 'package:recipe_cooking_navigator/ui/recipe_theme.dart';
 import 'package:recipe_cooking_navigator/ui/home_screen.dart';
 import 'package:recipe_cooking_navigator/ui/recipe_difficulty_meter.dart';
+import 'package:recipe_cooking_navigator/ui/recipe_changes_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -569,16 +570,33 @@ void main() {
     await tester.tap(find.byKey(const Key('open_version_history')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Version履歴'), findsOneWidget);
-    expect(find.byKey(const Key('recipe_revision_2')), findsOneWidget);
+    expect(find.text('バージョン履歴'), findsOneWidget);
+    expect(find.byKey(const Key('recipe_revision_2')), findsNothing);
     expect(find.byKey(const Key('recipe_revision_1')), findsOneWidget);
-    expect(find.text('Version 1から派生'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('next_recipe_revision')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('recipe_revision_2')), findsOneWidget);
+    expect(find.text('バージョン 1から改善したバージョン 2'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('activate_revision_2')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('activate_revision_2')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirm_activate_revision_2')));
     await tester.pumpAndSettle();
 
     expect(controller.activeRecipeFor(recipeId)?.revision, 2);
+    expect(
+      tester
+          .state<FormFieldState<int>>(
+            find.byKey(const Key('history_comparison_base')),
+          )
+          .value,
+      1,
+    );
     var progress = (await cookingStore.read())['progress'] as Map;
     expect((progress[recipeId] as Map)['revision'], 1);
     await tester.tap(find.byTooltip('戻る'));
@@ -592,7 +610,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('調理途中です・Version 1'), findsOneWidget);
+    expect(find.textContaining('調理途中です・バージョン 1'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.byKey(const Key('resume_cooking')),
@@ -626,6 +644,128 @@ void main() {
     progress = (await cookingStore.read())['progress'] as Map;
     expect((progress[recipeId] as Map)['revision'], 2);
   });
+
+  for (final width in [320.0, 412.0]) {
+    testWidgets(
+      'history keeps a selectable baseline while swiping old and new at $width with enlarged text',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 1120);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final documents = [
+          for (var revision = 1; revision <= 3; revision++)
+            jsonDecode(recipeSource) as Map<String, dynamic>,
+        ];
+        for (var index = 0; index < documents.length; index++) {
+          final recipe = documents[index]['recipe'] as Map;
+          recipe['revision'] = index + 1;
+          recipe['parent_revision'] = index == 0 ? null : index;
+          recipe['title'] = '生姜焼きバージョン${index + 1}';
+          recipe['stages'][0]['steps'][0]['timer_seconds'] = (index + 1) * 60;
+        }
+        final id = documents[0]['recipe']['id'] as String;
+        final versions = MemoryRecipeVersionStateStore({id: 2});
+        final cooking = CookingStore();
+        final controller = RecipeLibraryController(
+          _MemoryRecipeDocumentStore(documents),
+          _MemoryRecipeTagStore(),
+          RecipeValidator.fromSchemaString(schemaSource),
+          () async => null,
+          recipeVersionStateStore: versions,
+          cookingStore: cooking,
+        );
+        await controller.load();
+        final initialCooking = jsonEncode(await cooking.read());
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: RecipeTheme.light,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+            home: RecipeVersionHistoryScreen(
+              recipeId: id,
+              controller: controller,
+              initialRevision: 3,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        RecipeChangesCard comparison() =>
+            tester.widget<RecipeChangesCard>(find.byType(RecipeChangesCard));
+        expect(comparison().comparison.beforeRevision, 2);
+        expect(comparison().comparison.afterRevision, 3);
+        expect(
+          tester
+              .state<FormFieldState<int>>(
+                find.byKey(const Key('history_comparison_base')),
+              )
+              .value,
+          2,
+        );
+        await tester.drag(
+          find.byKey(const Key('recipe_revision_swipe')),
+          const Offset(180, 0),
+        );
+        await tester.pumpAndSettle();
+        expect(comparison().comparison.beforeRevision, 2);
+        expect(comparison().comparison.afterRevision, 2);
+        expect(comparison().comparison.changes, isEmpty);
+        await tester.drag(
+          find.byKey(const Key('recipe_revision_swipe')),
+          const Offset(180, 0),
+        );
+        await tester.pumpAndSettle();
+        expect(comparison().comparison.beforeRevision, 2);
+        expect(comparison().comparison.afterRevision, 1);
+        expect(
+          comparison().comparison.changes.any(
+            (change) => change.before == '120秒' && change.after == '60秒',
+          ),
+          isTrue,
+        );
+        final changesHeader = find.text(
+          '変更点（${comparison().comparison.changes.length}項目）',
+        );
+        await tester.scrollUntilVisible(
+          changesHeader,
+          150,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(changesHeader);
+        await tester.pumpAndSettle();
+        expect(find.text('比較元 · バージョン 2'), findsWidgets);
+        expect(find.text('表示中 · バージョン 1'), findsWidgets);
+        await tester.tap(find.byKey(const Key('history_comparison_base')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('バージョン 1').last);
+        await tester.pumpAndSettle();
+        expect(comparison().comparison.beforeRevision, 1);
+        expect(comparison().comparison.afterRevision, 1);
+        await tester.tap(find.byKey(const Key('next_recipe_revision')));
+        await tester.pumpAndSettle();
+        expect(comparison().comparison.beforeRevision, 1);
+        expect(comparison().comparison.afterRevision, 2);
+        expect(controller.activeRecipeFor(id)!.revision, 2);
+        expect(await versions.loadActiveRevisions(), {id: 2});
+        expect(jsonEncode(await cooking.read()), initialCooking);
+        for (var index = 0; index < 16; index++) {
+          await tester.drag(find.byType(ListView), const Offset(0, -350));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        }
+        await tester.scrollUntilVisible(
+          find.text('器具'),
+          -250,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('事前準備'), findsWidgets);
+      },
+    );
+  }
 
   testWidgets('opens feedback from a past version without activating it', (
     tester,
@@ -709,8 +849,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open_version_history')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('previous_recipe_revision')));
+    await tester.pumpAndSettle();
     final improve = find.byKey(const Key('improve_revision_1'));
-    await tester.ensureVisible(improve);
+    await tester.scrollUntilVisible(
+      improve,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(improve);
     await tester.pumpAndSettle();

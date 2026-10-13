@@ -74,7 +74,7 @@ class _CookingEntryState extends State<CookingEntry> {
                       index == null ||
                       index < 0 ||
                       !snapshotMatches)
-              ? '保存したVersionまたは工程が見つかりません。「最初から」で開始方法を選べます。'
+              ? '保存したバージョンまたは工程が見つかりません。「最初から」で開始方法を選べます。'
               : null;
           unreadable = false;
           loading = false;
@@ -99,7 +99,7 @@ class _CookingEntryState extends State<CookingEntry> {
         builder: (context) => AlertDialog(
           title: const Text('最初から始めますか？'),
           content: Text(
-            'Version ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の先頭から開始します。現在の途中位置を更新します。',
+            'バージョン ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の先頭から開始します。現在の途中位置を更新します。',
           ),
           actions: [
             TextButton(
@@ -184,7 +184,7 @@ class _CookingEntryState extends State<CookingEntry> {
               savedIndex != null &&
               savedIndex! >= 0) ...[
             Text(
-              '調理途中です・Version ${savedRecipe!.revision}・${savedContext!.targetServings}人分',
+              '調理途中です・バージョン ${savedRecipe!.revision}・${savedContext!.targetServings}人分',
             ),
             Text(
               '工程 ${savedIndex! + 1} / ${savedRecipe!.steps.length} ${savedRecipe!.steps[savedIndex!]['title']}',

@@ -261,6 +261,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                                   builder: (_) => RecipeVersionHistoryScreen(
                                     recipeId: activeRecipe.id,
                                     controller: controller,
+                                    initialRevision: activeRecipe.revision,
                                   ),
                                 ),
                               ),

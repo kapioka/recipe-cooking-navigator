@@ -156,7 +156,7 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
               ? '保存済みのレシピを開きました'
               : recipe.parentRevision == null
               ? '保存しました'
-              : '新しい版を保存しました。使用中の版は変わっていません',
+              : '新しいバージョンを保存しました。使用中のバージョンは変わっていません',
         ),
       ),
     );

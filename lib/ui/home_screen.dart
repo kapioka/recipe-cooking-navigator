@@ -738,7 +738,7 @@ class _RecipeCard extends StatelessWidget {
               if (latest == null) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('最新版レシピが見つかりません。')),
+                    const SnackBar(content: Text('最新のバージョンが見つかりません。')),
                   );
                 }
                 return;
@@ -770,7 +770,7 @@ class _RecipeCard extends StatelessWidget {
               key: Key('activate_latest_recipe_${recipe.id}'),
               value: 'latest',
               enabled: !controller.isLatestRevision(recipe.id, recipe.revision),
-              child: const Text('最新版レシピに変更'),
+              child: const Text('最新のバージョンに変更'),
             ),
             const PopupMenuItem<String>(
               value: 'archive',
@@ -814,7 +814,7 @@ class _ArchiveScreen extends StatelessWidget {
                     leading: const Icon(Icons.menu_book_outlined),
                     key: Key('archived_recipe_${recipe.id}'),
                     title: Text(recipe.title),
-                    subtitle: Text('Active Version ${recipe.revision}'),
+                    subtitle: Text('使用中のバージョン ${recipe.revision}'),
                     trailing: PopupMenuButton<String>(
                       tooltip: 'アーカイブの操作',
                       onSelected: (value) async {
@@ -834,7 +834,7 @@ class _ArchiveScreen extends StatelessWidget {
                           builder: (dialogContext) => AlertDialog(
                             title: const Text('レシピを完全削除しますか？'),
                             content: Text(
-                              '「${recipe.title}」の全Version、タグ、事前準備、調理履歴と評価を端末から削除します。元に戻せません。\n\nGoogle DriveのInboxに元ファイルが残っている場合、次の確認で再取込されます。先にDrive側の元ファイルを取り除いてください。',
+                              '「${recipe.title}」の全バージョン、タグ、事前準備、調理履歴と評価を端末から削除します。元に戻せません。\n\nGoogle DriveのInboxに元ファイルが残っている場合、次の確認で再取込されます。先にDrive側の元ファイルを取り除いてください。',
                             ),
                             actions: [
                               TextButton(

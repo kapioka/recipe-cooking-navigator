@@ -83,7 +83,7 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
         content: Text(
           legacy == null
               ? '空の好みから保存を始めます。端末で登録した好みは、その後に選んで反映できます。'
-              : '確認済みのDriveの好み（${legacy.revision}版）を引き継ぎます。以降の更新は履歴に残します。',
+              : '確認済みのDriveの好み（バージョン ${legacy.revision}）を引き継ぎます。以降の更新は履歴に残します。',
         ),
         actions: [
           TextButton(
@@ -176,7 +176,7 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
         : intent == -1
         ? '控えめ'
         : '強め';
-    return '${session['cooked_at']}・Version ${session['recipe_revision']}\n'
+    return '${session['cooked_at']}・バージョン ${session['recipe_revision']}\n'
         '${labels[dimension]}の偏差：$deviation、次回の希望：$direction';
   }
 
@@ -355,7 +355,9 @@ class _PreferenceScreenState extends State<PreferenceScreen> {
                   ),
                 ),
               const SizedBox(height: 16),
-              Text('登録履歴：${snapshot!.history.length}版。元の評価と過去の好みを保持しています。'),
+              Text(
+                '登録済みバージョン：${snapshot!.history.length}件。元の評価と過去の好みを保持しています。',
+              ),
             ],
             const SizedBox(height: 24),
             if (controller.archive != null) ...[

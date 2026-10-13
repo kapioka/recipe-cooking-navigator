@@ -255,7 +255,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       if (recipe.revision == _improvementRevision) improvement = recipe;
     }
     if (session == null || improvement == null) {
-      _report('調理記録または改善元Versionが見つかりません。');
+      _report('調理記録または改善元バージョンが見つかりません。');
       return;
     }
     if (_goal.text.trim().isEmpty) {
@@ -267,8 +267,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Feedbackを共有しますか？'),
         content: Text(
-          '調理したVersion ${session['revision']}を評価し、'
-          'Version ${improvement!.revision}を改善元にします。'
+          '調理したバージョン ${session['revision']}を評価し、'
+          'バージョン ${improvement!.revision}を改善元にします。'
           '評価と一言メモを共有します。',
         ),
         actions: [

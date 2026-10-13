@@ -54,6 +54,45 @@ class RecipeImportPreview {
   int? get parentRevision => _document.parentRevision;
   int get servings => _document.servings;
   int get totalTimeMinutes => _document.totalTimeMinutes;
+  int get estimatedDifficulty => _document.estimatedDifficulty;
+  String _render(List text) =>
+      _document.renderText(text, _document.contextFor(servings)).displayText;
+  List<String> get utensilDetails => [
+    for (final item in _document.recipeData['utensils'] as List)
+      '${item['name']} ${item['quantity']}個${item['reuse_note'] == null ? '' : '\n${_render(item['reuse_note'] as List)}'}',
+  ];
+  List<String> get preparationDetails => [
+    for (final item in _document.recipeData['preparation'] as List)
+      '${_render(item['text'] as List)}\n材料: ${_document.ingredientsFor(Map<String, dynamic>.from(item as Map), _document.contextFor(servings)).join('／')}',
+  ];
+  List<String> get overviewDetails => [
+    for (final item in _document.overview) _render(item),
+  ];
+  List<String> get adjustmentDetails => [
+    for (final item in _document.recipeData['adjustments'] as List)
+      '${_render(item['condition'] as List)}\n${_render(item['action'] as List)}',
+  ];
+  List<String> get completeStepDetails {
+    final descriptions = stepDetails;
+    final utensils = {
+      for (final item in _document.recipeData['utensils'] as List)
+        item['id']: item['name'],
+    };
+    return [
+      for (final (index, step) in _document.steps.indexed)
+        [
+          descriptions[index],
+          '材料: ${_document.ingredientsFor(step, _document.contextFor(servings)).join('／')}',
+          if (step['timer_seconds'] != null) 'タイマー: ${step['timer_seconds']}秒',
+          '器具: ${(step['utensil_ids'] as List).map((id) => utensils[id]).join('／')}',
+          for (final task in step['parallel_tasks'] as List)
+            '並行作業: ${_render(task as List)}',
+          if (step['next_preview'] != null)
+            '次の工程: ${_render(step['next_preview'] as List)}',
+        ].join('\n'),
+    ];
+  }
+
   int get ingredientCount => _document.ingredients.length;
   int get stepCount => _document.steps.length;
   List<String> get ingredientDetails => [
@@ -401,7 +440,7 @@ class RecipeLibraryController extends ChangeNotifier {
       _versionStateReadable = false;
       _activeRevisionsByRecipeId = const {};
       _rebuildActiveRecipes();
-      _versionStateLoadError = 'active Versionの保存状態を読み込めませんでした。';
+      _versionStateLoadError = '使用中のバージョンの保存状態を読み込めませんでした。';
     }
 
     try {
@@ -528,7 +567,7 @@ class RecipeLibraryController extends ChangeNotifier {
         if (accepts != null && !accepts(preview)) {
           return const RecipeImportPreparation(
             status: RecipeImportPreparationStatus.failed,
-            message: '生成したレシピのID・版・改善元が依頼と一致しません。保存していません。',
+            message: '生成したレシピのID・バージョン・改善元が依頼と一致しません。保存していません。',
           );
         }
         _pendingFileImport = preview;
@@ -553,7 +592,7 @@ class RecipeLibraryController extends ChangeNotifier {
         _finishPreparedImport();
         return const RecipeImportPreparation(
           status: RecipeImportPreparationStatus.failed,
-          message: '生成したレシピのID・版・改善元が依頼と一致しません。保存していません。',
+          message: '生成したレシピのID・バージョン・改善元が依頼と一致しません。保存していません。',
         );
       }
       return prepared;
@@ -793,7 +832,7 @@ class RecipeLibraryController extends ChangeNotifier {
                   fileName: inboxFile.name,
                   status: RecipeInboxFileStatus.skipped,
                   message:
-                      '「${outcome.document.title}」のVersion ${outcome.document.revision}は保存済みです。',
+                      '「${outcome.document.title}」のバージョン ${outcome.document.revision}は保存済みです。',
                 ),
               );
             case StoreRecipeResult.conflictingRevision:
@@ -801,7 +840,7 @@ class RecipeLibraryController extends ChangeNotifier {
                 RecipeInboxFileResult(
                   fileName: inboxFile.name,
                   status: RecipeInboxFileStatus.rejected,
-                  message: '同じレシピIDとVersionで内容が異なります。',
+                  message: '同じレシピIDとバージョンで内容が異なります。',
                 ),
               );
               continue;
@@ -908,12 +947,12 @@ class RecipeLibraryController extends ChangeNotifier {
       case StoreRecipeResult.alreadyExists:
         return RecipeImportResult(
           RecipeImportStatus.alreadyExists,
-          '「${document.title}」のVersion ${document.revision}は保存済みです。',
+          '「${document.title}」のバージョン ${document.revision}は保存済みです。',
         );
       case StoreRecipeResult.conflictingRevision:
         return const RecipeImportResult(
           RecipeImportStatus.failed,
-          '同じレシピIDとVersionで内容が異なるため、取り込みませんでした。',
+          '同じレシピIDとバージョンで内容が異なるため、取り込みませんでした。',
         );
     }
   }
@@ -982,13 +1021,13 @@ class RecipeLibraryController extends ChangeNotifier {
     if (selected == null) {
       return const ActiveRevisionUpdateResult(
         ActiveRevisionUpdateStatus.notFound,
-        '選択したVersionが見つかりません。保存状態は変更していません。',
+        '選択したバージョンが見つかりません。保存状態は変更していません。',
       );
     }
     if (isActiveRevision(recipeId, revision)) {
       return const ActiveRevisionUpdateResult(
         ActiveRevisionUpdateStatus.alreadyActive,
-        'このVersionはすでにactiveです。',
+        'このバージョンはすでに使用中です。',
       );
     }
 
@@ -1004,7 +1043,7 @@ class RecipeLibraryController extends ChangeNotifier {
       notifyListeners();
       return ActiveRevisionUpdateResult(
         ActiveRevisionUpdateStatus.updated,
-        'Version $revisionをactiveにしました。',
+        'バージョン $revisionを今後使うレシピにしました。',
       );
     } on RecipeVersionStateStorageException catch (error) {
       return ActiveRevisionUpdateResult(
@@ -1014,7 +1053,7 @@ class RecipeLibraryController extends ChangeNotifier {
     } catch (_) {
       return const ActiveRevisionUpdateResult(
         ActiveRevisionUpdateStatus.failed,
-        'active Versionを変更できませんでした。',
+        '使用中のバージョンを変更できませんでした。',
       );
     }
   });
@@ -1190,7 +1229,7 @@ class RecipeLibraryController extends ChangeNotifier {
       (entry) => revisionFor(entry.key, entry.value) == null,
     );
     _versionStateLoadError = hasMissingRevision
-        ? '保存したactive Versionが見つからないレシピは、最新Versionを表示しています。状態は変更していません。'
+        ? '保存した使用中のバージョンが見つからないレシピは、最新のバージョンを表示しています。状態は変更していません。'
         : null;
   }
 
