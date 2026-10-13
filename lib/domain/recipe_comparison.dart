@@ -3,9 +3,16 @@ import 'dart:collection';
 import 'recipe_document.dart';
 
 class RecipeContentChange {
-  const RecipeContentChange(this.section, this.label, this.before, this.after);
+  const RecipeContentChange(
+    this.section,
+    this.label,
+    this.before,
+    this.after, {
+    this.contentKey,
+  });
   final String section, label;
   final String? before, after;
+  final String? contentKey;
   String get kind => before == null
       ? '追加'
       : after == null
@@ -55,17 +62,38 @@ class RecipeComparison {
       if (old != null) used.add(old);
       if (old?.text != row.text) {
         result.add(
-          RecipeContentChange(row.section, row.label, old?.text, row.text),
+          RecipeContentChange(
+            row.section,
+            row.label,
+            old?.text,
+            row.text,
+            contentKey: row.key,
+          ),
         );
       }
     }
     for (final row in oldRows.where((row) => !used.contains(row))) {
-      result.add(RecipeContentChange(row.section, row.label, row.text, null));
+      result.add(
+        RecipeContentChange(
+          row.section,
+          row.label,
+          row.text,
+          null,
+          contentKey: row.key,
+        ),
+      );
     }
     changes = List.unmodifiable(result);
   }
   final int beforeRevision, afterRevision;
   late final List<RecipeContentChange> changes;
+
+  RecipeContentChange? changeFor(String key) {
+    for (final change in changes) {
+      if (change.contentKey == key) return change;
+    }
+    return null;
+  }
 
   static List<_ContentRow> _content(RecipeDocument document) {
     final data = document.recipeData;

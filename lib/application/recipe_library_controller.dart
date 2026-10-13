@@ -49,12 +49,103 @@ class RecipeImportPreview {
   ];
 
   String get title => _document.title;
+  List<String> get noticeKeys => [
+    'serving_adjustment',
+    for (final key in ['storage_note', 'lunchbox_note'])
+      if (_document.recipeData[key] is List)
+        key == 'storage_note' ? 'storage' : 'lunchbox',
+  ];
   String get recipeId => _document.id;
   int get revision => _document.revision;
   int? get parentRevision => _document.parentRevision;
   int get servings => _document.servings;
   int get totalTimeMinutes => _document.totalTimeMinutes;
   int get estimatedDifficulty => _document.estimatedDifficulty;
+  List<String> get amountIds => [
+    for (final amount in _document.amounts) amount.id,
+  ];
+  List<String> get utensilIds => [
+    for (final item in _document.recipeData['utensils'] as List)
+      item['id'] as String,
+  ];
+  List<String> get preparationIds => [
+    for (final item in _document.recipeData['preparation'] as List)
+      item['id'] as String,
+  ];
+  List<
+    ({
+      String id,
+      String title,
+      List<({String key, String label, String text})> fields,
+    })
+  >
+  comparisonSteps({int? targetServings}) {
+    final context = _document.contextFor(targetServings ?? servings);
+    String render(List value) =>
+        _document.renderText(value, context).displayText;
+    final utensils = {
+      for (final item in _document.recipeData['utensils'] as List)
+        item['id']: item['name'],
+    };
+    return [
+      for (final step in _document.steps)
+        (
+          id: step['id'] as String,
+          title: step['title'] as String,
+          fields: [
+            (
+              key: 'instruction:${step['id']}',
+              label: '',
+              text: render(step['instruction'] as List),
+            ),
+            if (step['heat'] is List)
+              (
+                key: 'heat:${step['id']}',
+                label: '火加減',
+                text: render(step['heat'] as List),
+              ),
+            if (step['done_when'] is List)
+              (
+                key: 'done:${step['id']}',
+                label: '完了の目安',
+                text: render(step['done_when'] as List),
+              ),
+            (
+              key: 'step_amounts:${step['id']}',
+              label: '材料',
+              text: _document.ingredientsFor(step, context).join('／'),
+            ),
+            if (step['timer_seconds'] != null)
+              (
+                key: 'timer:${step['id']}',
+                label: 'タイマー',
+                text: '${step['timer_seconds']}秒',
+              ),
+            (
+              key: 'step_utensils:${step['id']}',
+              label: '器具',
+              text: (step['utensil_ids'] as List)
+                  .map((id) => utensils[id])
+                  .join('／'),
+            ),
+            for (final (index, task)
+                in (step['parallel_tasks'] as List).indexed)
+              (
+                key: 'parallel_$index:${step['id']}',
+                label: '並行作業',
+                text: render(task as List),
+              ),
+            if (step['next_preview'] is List)
+              (
+                key: 'next:${step['id']}',
+                label: '次の工程',
+                text: render(step['next_preview'] as List),
+              ),
+          ],
+        ),
+    ];
+  }
+
   String _render(List text) =>
       _document.renderText(text, _document.contextFor(servings)).displayText;
   List<String> get utensilDetails => [

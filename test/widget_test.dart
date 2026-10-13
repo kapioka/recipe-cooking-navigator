@@ -30,6 +30,7 @@ import 'package:recipe_cooking_navigator/ui/recipe_theme.dart';
 import 'package:recipe_cooking_navigator/ui/home_screen.dart';
 import 'package:recipe_cooking_navigator/ui/recipe_difficulty_meter.dart';
 import 'package:recipe_cooking_navigator/ui/recipe_changes_card.dart';
+import 'package:recipe_cooking_navigator/ui/recipe_compared_text.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -737,8 +738,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(changesHeader);
         await tester.pumpAndSettle();
-        expect(find.text('比較元 · バージョン 2'), findsWidgets);
-        expect(find.text('表示中 · バージョン 1'), findsWidgets);
+        expect(find.text('120秒 → 60秒'), findsWidgets);
+        expect(find.text('緑＝表示中・淡い赤＝比較元。基準人数同士で比較。'), findsOneWidget);
         await tester.tap(find.byKey(const Key('history_comparison_base')));
         await tester.pumpAndSettle();
         await tester.tap(find.text('バージョン 1').last);
@@ -766,6 +767,71 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'detail jumps to changed steps and separates scaling from version changes',
+    (tester) async {
+      final original = jsonDecode(recipeSource) as Map<String, dynamic>;
+      final changed = jsonDecode(recipeSource) as Map<String, dynamic>;
+      final recipe = changed['recipe'] as Map;
+      recipe['revision'] = 2;
+      recipe['parent_revision'] = 1;
+      recipe['amounts'][0]['quantity']['value']['numerator'] = 150;
+      recipe['stages'][0]['steps'][0]['timer_seconds'] = 150;
+      final id = recipe['id'] as String;
+      final versions = MemoryRecipeVersionStateStore({id: 2});
+      final cooking = CookingStore();
+      final controller = RecipeLibraryController(
+        _MemoryRecipeDocumentStore([original, changed]),
+        _MemoryRecipeTagStore(),
+        RecipeValidator.fromSchemaString(schemaSource),
+        () async => null,
+        recipeVersionStateStore: versions,
+        cookingStore: cooking,
+      );
+      await controller.load();
+      final progress = jsonEncode(await cooking.read());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RecipeTheme.light,
+          home: RecipeDetailScreen(
+            recipe: controller.activeRecipeFor(id)!,
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('step_text_timer:step-onion')),
+        findsNothing,
+      );
+      final chip = find.byKey(const ValueKey('change_section_調理の工程'));
+      await tester.ensureVisible(chip);
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      expect(find.text('詳しい工程を閉じる'), findsOneWidget);
+      final timer = tester.widget<RecipeComparedText>(
+        find.byKey(const ValueKey('step_text_timer:step-onion')),
+      );
+      expect(timer.compared, isTrue);
+      expect(timer.before, '120秒');
+      expect(timer.text, '150秒');
+      final increase = find.byKey(const Key('increase_servings'));
+      await tester.ensureVisible(increase);
+      await tester.pumpAndSettle();
+      await tester.tap(increase);
+      await tester.pumpAndSettle();
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is RecipeComparedText && widget.compared,
+        ),
+        findsNothing,
+      );
+      expect(await versions.loadActiveRevisions(), {id: 2});
+      expect(jsonEncode(await cooking.read()), progress);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('opens feedback from a past version without activating it', (
     tester,
