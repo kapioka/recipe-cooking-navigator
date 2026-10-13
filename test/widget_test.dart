@@ -648,18 +648,22 @@ void main() {
           .value,
       secondSessionId,
     );
+    expect(find.text(cooked.title), findsOneWidget);
     tester
         .widget<DropdownButton<String>>(
           find.byKey(const Key('feedback_session')),
         )
         .onChanged!(firstSessionId);
     await tester.pumpAndSettle();
+    expect(find.text(first.title), findsOneWidget);
+    expect(find.text(cooked.title), findsNothing);
     tester
         .widget<DropdownButton<String>>(
           find.byKey(const Key('feedback_session')),
         )
         .onChanged!(secondSessionId);
     await tester.pumpAndSettle();
+    expect(find.text(cooked.title), findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const Key('feedback_improvement_revision')),
       300,

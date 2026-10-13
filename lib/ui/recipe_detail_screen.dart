@@ -5,7 +5,7 @@ import '../domain/recipe_document.dart';
 import 'cooking_entry.dart';
 import 'feedback_screen.dart';
 import 'recipe_section.dart';
-import 'recipe_photo_avatar.dart';
+import 'recipe_heading.dart';
 import 'recipe_theme.dart';
 import 'recipe_difficulty_meter.dart';
 import 'recipe_version_history_screen.dart';
@@ -173,10 +173,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 RecipeSection(
                   key: const Key('detail_recipe_summary'),
                   children: [
-                    _DetailRecipeHeading(
-                      recipe: activeRecipe,
-                      controller: controller,
-                    ),
+                    RecipeHeading(recipe: activeRecipe, controller: controller),
                     const SizedBox(height: 16),
                     Wrap(
                       spacing: 16,
@@ -538,42 +535,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           .showSnackBar(const SnackBar(content: Text('タグを保存しました。')));
     }
   }
-}
-
-class _DetailRecipeHeading extends StatelessWidget {
-  const _DetailRecipeHeading({required this.recipe, required this.controller});
-  final RecipeDocument recipe;
-  final RecipeLibraryController controller;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, bounds) {
-      final photo = RecipePhotoAvatar(
-        library: controller,
-        recipeId: recipe.id,
-        recipeTitle: recipe.title,
-      );
-      final title = Semantics(
-        header: true,
-        child: Text(recipe.title, style: RecipeTheme.detailRecipeTitle),
-      );
-      if (bounds.maxWidth < 300 ||
-          MediaQuery.textScalerOf(context).scale(24) > 32) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [photo, const SizedBox(height: 12), title],
-        );
-      }
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          photo,
-          const SizedBox(width: 16),
-          Expanded(child: title),
-        ],
-      );
-    },
-  );
 }
 
 class _DetailQuantityRow extends StatelessWidget {
