@@ -1084,6 +1084,19 @@ void main() {
       find.byKey(const Key('open_source_licenses_button')),
       findsOneWidget,
     );
+    await tester.tap(find.byKey(const Key('open_source_licenses_button')));
+    await tester.pumpAndSettle();
+    final pubspecSource = await tester.runAsync(
+      () => File('pubspec.yaml').readAsString(),
+    );
+    final packageVersion = RegExp(
+      r'^version:\s*([^+\s]+)',
+      multiLine: true,
+    ).firstMatch(pubspecSource!)!.group(1);
+    expect(
+      tester.widget<LicensePage>(find.byType(LicensePage)).applicationVersion,
+      packageVersion,
+    );
   });
 
   testWidgets('searches ingredients and saves searchable recipe tags', (
