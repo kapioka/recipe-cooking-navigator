@@ -40,7 +40,7 @@ void showAppInformationDialog(BuildContext context) {
             showLicensePage(
               context: context,
               applicationName: 'Recipe Cooking Navigator',
-              applicationVersion: '0.2.0',
+              applicationVersion: '0.2.1',
               applicationLegalese:
                   'Copyright 2026 kapioka\n'
                   'Licensed under the Apache License 2.0\n\n'
