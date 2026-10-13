@@ -26,7 +26,27 @@ class RecipeCreationController extends ChangeNotifier {
   final RecipeLibraryController library;
   RecipeCreationStage stage = RecipeCreationStage.editing;
   RecipeImportPreview? preview;
+  AiRecipeRequest? candidateRequest;
+  String? candidateModel;
   String? candidateConditions;
+  String? conditionsSaveWarning;
+  String get candidateConditionsDescription {
+    final feedback = candidateRequest?.feedback;
+    return [
+      candidateModel == null
+          ? '貼り付けた回答を形式検証して表示しています。生成元や送信完了はアプリでは確認できません。'
+          : 'ChatGPTの回答を受信し、レシピの形式を検証して表示しています。\n使用モデル: $candidateModel',
+      if (feedback != null) ...[
+        '改善元: バージョン ${(feedback['recipe_snapshot'] as Map)['recipe']['revision']}',
+        '評価から引き継いだ改善の希望\n${(feedback['revision_request'] as Map)['goal']}',
+        candidateModel == null
+            ? '共有用の依頼には、選択した調理後の評価も含めました。'
+            : '選択した調理後の評価も一緒に送っています。',
+      ],
+      candidateConditions ?? 'この回答の送信条件は記録されていません。',
+    ].join('\n\n');
+  }
+
   String? message;
   String? diagnostic;
   SiwcFailureKind? failureKind;
@@ -103,6 +123,8 @@ class RecipeCreationController extends ChangeNotifier {
         stage = RecipeCreationStage.editing;
       } else {
         preview = prepared.preview;
+        candidateRequest = request;
+        candidateModel = model;
         candidateConditions = conditions;
         diagnostic = '受信したレシピ本文: ${source.length}文字';
         stage = RecipeCreationStage.preview;
@@ -163,6 +185,7 @@ class RecipeCreationController extends ChangeNotifier {
     }
     stage = RecipeCreationStage.saving;
     message = null;
+    conditionsSaveWarning = null;
     _changed();
     final prepared = await library.reprepareImport(preview!);
     RecipeImportResult result;
@@ -178,6 +201,14 @@ class RecipeCreationController extends ChangeNotifier {
     if (_disposed) return result;
     if (result.status == RecipeImportStatus.imported ||
         result.status == RecipeImportStatus.alreadyExists) {
+      if (candidateRequest != null) {
+        conditionsSaveWarning = await library.recordCreationConditions(
+          preview!.recipeId,
+          preview!.revision,
+          candidateConditionsDescription,
+        );
+      }
+      if (_disposed) return result;
       stage = RecipeCreationStage.saved;
     } else {
       stage = RecipeCreationStage.preview;

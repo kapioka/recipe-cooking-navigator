@@ -8,6 +8,8 @@ import 'recipe_section.dart';
 import 'recipe_heading.dart';
 import 'recipe_theme.dart';
 import 'recipe_difficulty_meter.dart';
+import 'recipe_changes_card.dart';
+import 'recipe_revision_navigator.dart';
 import 'recipe_version_history_screen.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
@@ -33,6 +35,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   bool preparationLoading = true;
   bool preparationSaving = false;
   String? preparationError;
+  int? _browsingRevision;
+  bool _activatingRevision = false;
 
   RecipeLibraryController get controller => widget.controller;
 
@@ -127,9 +131,17 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final activeRecipe = widget.showExactRevision
-            ? widget.recipe
-            : controller.activeRecipeFor(widget.recipe.id) ?? widget.recipe;
+        final activeRecipe =
+            (_browsingRevision == null
+                ? null
+                : controller.revisionFor(
+                    widget.recipe.id,
+                    _browsingRevision!,
+                  )) ??
+            (widget.showExactRevision
+                ? widget.recipe
+                : controller.activeRecipeFor(widget.recipe.id) ??
+                      widget.recipe);
         final identity = '${activeRecipe.id}:${activeRecipe.revision}';
         if (identity != activeIdentity) {
           activeIdentity = identity;
@@ -148,6 +160,12 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         final tags = controller.tagsFor(activeRecipe.id);
         final utensils = activeRecipe.recipeData['utensils'] as List;
         final preparation = activeRecipe.recipeData['preparation'] as List;
+        final parent = activeRecipe.parentRevision == null
+            ? null
+            : controller.revisionFor(
+                activeRecipe.id,
+                activeRecipe.parentRevision!,
+              );
         return Scaffold(
           appBar: AppBar(
             title: const Text('レシピ詳細'),
@@ -160,360 +178,426 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               ),
             ],
           ),
-          body: Theme(
-            data: Theme.of(context).copyWith(
-              textTheme: Theme.of(context).textTheme.copyWith(
-                bodyMedium: RecipeTheme.readingBody,
-                bodyLarge: RecipeTheme.readingBody,
+          body: RecipeRevisionNavigator(
+            revisions: revisions.map((recipe) => recipe.revision).toList()
+              ..sort(),
+            current: activeRecipe.revision,
+            enabled: !_activatingRevision && !preparationSaving,
+            onChanged: (revision) =>
+                setState(() => _browsingRevision = revision),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                textTheme: Theme.of(context).textTheme.copyWith(
+                  bodyMedium: RecipeTheme.readingBody,
+                  bodyLarge: RecipeTheme.readingBody,
+                ),
               ),
-            ),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              children: [
-                RecipeSection(
-                  key: const Key('detail_recipe_summary'),
-                  children: [
-                    RecipeHeading(recipe: activeRecipe, controller: controller),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 16,
-                      runSpacing: 8,
-                      children: [
-                        Text(
-                          '$selectedServings人分',
-                          key: const Key('selected_servings_chip'),
-                          style: RecipeTheme.readingNote,
-                        ),
-                        Text(
-                          '調理時間目安 ${activeRecipe.totalTimeMinutes}分',
-                          style: RecipeTheme.readingNote,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    RecipeDifficultyMeter(
-                      difficulty: activeRecipe.estimatedDifficulty,
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+              child: ListView(
+                key: ValueKey('detail-$identity'),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                children: [
+                  RecipeSection(
+                    key: const Key('detail_recipe_summary'),
+                    children: [
+                      RecipeHeading(
+                        recipe: activeRecipe,
+                        controller: controller,
                       ),
-                      decoration: BoxDecoration(
-                        color: RecipeTheme.sage,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 8,
                         children: [
                           Text(
-                            controller.isActiveRevision(
-                                  activeRecipe.id,
-                                  activeRecipe.revision,
-                                )
-                                ? '使用中のバージョン ${activeRecipe.revision}'
-                                : '表示中のバージョン ${activeRecipe.revision}',
-                            key: const Key('active_recipe_version_chip'),
+                            '$selectedServings人分',
+                            key: const Key('selected_servings_chip'),
                             style: RecipeTheme.readingNote,
                           ),
-                          if (latestRecipe != null &&
-                              latestRecipe.revision != activeRecipe.revision)
+                          Text(
+                            '調理時間目安 ${activeRecipe.totalTimeMinutes}分',
+                            style: RecipeTheme.readingNote,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      RecipeDifficultyMeter(
+                        difficulty: activeRecipe.estimatedDifficulty,
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: RecipeTheme.sage,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
                             Text(
-                              '最新のバージョン ${latestRecipe.revision}',
+                              controller.isActiveRevision(
+                                    activeRecipe.id,
+                                    activeRecipe.revision,
+                                  )
+                                  ? '使用中のバージョン ${activeRecipe.revision}'
+                                  : '表示中のバージョン ${activeRecipe.revision}',
+                              key: const Key('active_recipe_version_chip'),
                               style: RecipeTheme.readingNote,
                             ),
-                          TextButton.icon(
-                            key: const Key('open_version_history'),
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => RecipeVersionHistoryScreen(
-                                  recipeId: activeRecipe.id,
-                                  controller: controller,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(Icons.history, size: 18),
-                            label: Text('履歴（${revisions.length}件）'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                RecipeSection(
-                  title: '材料',
-                  icon: Icons.restaurant_outlined,
-                  titleStyle: RecipeTheme.readingHeading,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: RecipeTheme.cream,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text('調理する人数', style: RecipeTheme.readingNote),
-                          const SizedBox(height: 4),
-                          Semantics(
-                            label: '調理人数、現在$selectedServings人分',
-                            child: Row(
-                              children: [
-                                IconButton.outlined(
-                                  key: const Key('decrease_servings'),
-                                  tooltip: '人数を1人減らす',
-                                  onPressed:
-                                      selectedServings >
-                                          activeRecipe.minServings
-                                      ? () => setState(() => selectedServings--)
-                                      : null,
-                                  icon: const Icon(Icons.remove),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    '$selectedServings 人分',
-                                    textAlign: TextAlign.center,
-                                    style: RecipeTheme.readingHeading,
-                                  ),
-                                ),
-                                IconButton.outlined(
-                                  key: const Key('increase_servings'),
-                                  tooltip: '人数を1人増やす',
-                                  onPressed:
-                                      selectedServings <
-                                          activeRecipe.maxServings
-                                      ? () => setState(() => selectedServings++)
-                                      : null,
-                                  icon: const Icon(Icons.add),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
+                            if (latestRecipe != null &&
+                                latestRecipe.revision != activeRecipe.revision)
                               Text(
-                                '基準 ${activeRecipe.servings}人分',
+                                '最新のバージョン ${latestRecipe.revision}',
                                 style: RecipeTheme.readingNote,
                               ),
-                              TextButton(
-                                key: const Key('reset_servings'),
-                                onPressed:
-                                    selectedServings == activeRecipe.servings
-                                    ? null
-                                    : () => setState(
-                                        () => selectedServings =
-                                            activeRecipe.servings,
-                                      ),
-                                child: const Text('基準人数に戻す'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    for (final ingredient in ingredientSummaries)
-                      _DetailQuantityRow(
-                        name: ingredient.name,
-                        quantity: ingredient.quantity,
-                        note: [
-                          ingredient.details,
-                          ingredient.note,
-                        ].whereType<String>().join('\n'),
-                      ),
-                    const SizedBox(height: 8),
-                    Text(
-                      activeRecipe.minServings == activeRecipe.maxServings
-                          ? 'このレシピは人数変更できません。${activeRecipe.servingAdjustmentNote}'
-                          : selectedServings == activeRecipe.servings
-                          ? activeRecipe.servingAdjustmentNote
-                          : '材料を$selectedServings人分に換算しています。加熱時間・火加減・器具は自動調整されません。\n${activeRecipe.servingAdjustmentNote}',
-                      key: const Key('serving_adjustment_note'),
-                      style: RecipeTheme.readingNote,
-                    ),
-                  ],
-                ),
-                if (utensils.isNotEmpty)
-                  RecipeSection(
-                    title: '器具',
-                    icon: Icons.soup_kitchen_outlined,
-                    titleStyle: RecipeTheme.readingHeading,
-                    children: [
-                      for (final utensil in utensils)
-                        _DetailQuantityRow(
-                          name: utensil['name'] as String,
-                          quantity: '${utensil['quantity']}',
-                          note: utensil['reuse_note'] == null
-                              ? ''
-                              : activeRecipe
-                                    .renderText(
-                                      utensil['reuse_note'] as List<dynamic>,
-                                      cookingContext,
-                                    )
-                                    .displayText,
-                        ),
-                    ],
-                  ),
-                if (preparation.isNotEmpty)
-                  RecipeSection(
-                    title: '事前準備',
-                    icon: Icons.checklist_outlined,
-                    titleStyle: RecipeTheme.readingHeading,
-                    children: [
-                      if (preparationLoading) const LinearProgressIndicator(),
-                      if (preparationError != null) ...[
-                        Text(
-                          preparationError!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              preparationLoading = true;
-                              preparationError = null;
-                            });
-                            _loadPreparation(activeRecipe);
-                          },
-                          child: const Text('再読み込み'),
-                        ),
-                      ],
-                      for (final entry in preparation.indexed)
-                        CheckboxListTile(
-                          key: Key('preparation_${entry.$2['id']}'),
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          value: checkedPreparation.contains(entry.$2['id']),
-                          onChanged:
-                              preparationLoading ||
-                                  preparationSaving ||
-                                  preparationError != null
-                              ? null
-                              : (value) => _setPreparation(
-                                  activeRecipe,
-                                  entry.$2['id'] as String,
-                                  value ?? false,
-                                ),
-                          title: Text(
-                            activeRecipe
-                                .renderText(
-                                  entry.$2['text'] as List<dynamic>,
-                                  cookingContext,
-                                )
-                                .displayText,
-                            style: RecipeTheme.readingBody,
-                          ),
-                        ),
-                      if (checkedPreparation.isNotEmpty)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            key: const Key('reset_preparation'),
-                            onPressed:
-                                preparationSaving || preparationError != null
-                                ? null
-                                : () => _resetPreparation(activeRecipe),
-                            child: const Text('チェックをリセット'),
-                          ),
-                        ),
-                      const Text(
-                        'チェックはこのバージョンに保存されます。次回の調理前に再確認してください。',
-                        style: RecipeTheme.readingNote,
-                      ),
-                    ],
-                  ),
-                RecipeSection(
-                  title: '全体工程',
-                  icon: Icons.format_list_numbered_outlined,
-                  titleStyle: RecipeTheme.readingHeading,
-                  children: [
-                    for (final entry in activeRecipe.overview.indexed)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: RecipeTheme.sage,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${entry.$1 + 1}',
-                                style: RecipeTheme.readingNote.copyWith(
-                                  fontWeight: FontWeight.w600,
+                            TextButton.icon(
+                              key: const Key('open_version_history'),
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => RecipeVersionHistoryScreen(
+                                    recipeId: activeRecipe.id,
+                                    controller: controller,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                activeRecipe
-                                    .renderText(entry.$2, cookingContext)
-                                    .displayText,
-                              ),
+                              icon: const Icon(Icons.history, size: 18),
+                              label: Text('履歴（${revisions.length}件）'),
                             ),
                           ],
                         ),
                       ),
-                  ],
-                ),
-                RecipeSection(
-                  title: 'タグ',
-                  icon: Icons.sell_outlined,
-                  titleStyle: RecipeTheme.readingHeading,
-                  children: [
-                    if (tags.isEmpty)
-                      const Text('タグはまだありません', style: RecipeTheme.readingNote)
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: tags
-                            .map((tag) => Chip(label: Text(tag)))
-                            .toList(growable: false),
-                      ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => _editTags(context),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('編集'),
-                      ),
-                    ),
-                  ],
-                ),
-                CookingEntry(
-                  key: ValueKey('${activeRecipe.id}:${activeRecipe.revision}'),
-                  recipe: activeRecipe,
-                  controller: controller,
-                  cookingContext: cookingContext,
-                ),
-                OutlinedButton.icon(
-                  key: const Key('open_feedback'),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => FeedbackScreen(
-                        recipeId: activeRecipe.id,
-                        controller: controller,
-                      ),
+                    ],
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('use_displayed_recipe'),
+                    onPressed:
+                        _activatingRevision ||
+                            controller.isActiveRevision(
+                              activeRecipe.id,
+                              activeRecipe.revision,
+                            )
+                        ? null
+                        : () => _useDisplayedRecipe(activeRecipe),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(
+                      controller.isActiveRevision(
+                            activeRecipe.id,
+                            activeRecipe.revision,
+                          )
+                          ? '今後使うレシピとして選択中'
+                          : '今後使うレシピにする',
                     ),
                   ),
-                  icon: const Icon(Icons.rate_review_outlined),
-                  label: const Text('調理後の評価・ChatGPTで改善'),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  if (parent != null)
+                    RecipeChangesCard(
+                      comparison: RecipeImportPreview.forDisplay(activeRecipe)
+                          .compareWith(RecipeImportPreview.forDisplay(parent)),
+                    ),
+                  if (activeRecipe.parentRevision != null && parent == null)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Text('改善元が端末にないため、変更点を比較できません。'),
+                    ),
+                  ExpansionTile(
+                    key: ValueKey('creation-conditions-$identity'),
+                    title: const Text('このレシピを作った条件'),
+                    childrenPadding: const EdgeInsets.all(16),
+                    expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SelectableText(
+                        controller.creationConditionsFor(
+                              activeRecipe.id,
+                              activeRecipe.revision,
+                            ) ??
+                            controller.creationRecordError ??
+                            'このバージョンの作成条件は記録されていません。保存されたレシピデータを表示しています。',
+                      ),
+                    ],
+                  ),
+                  RecipeSection(
+                    title: '材料',
+                    icon: Icons.restaurant_outlined,
+                    titleStyle: RecipeTheme.readingHeading,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: RecipeTheme.cream,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              '調理する人数',
+                              style: RecipeTheme.readingNote,
+                            ),
+                            const SizedBox(height: 4),
+                            Semantics(
+                              label: '調理人数、現在$selectedServings人分',
+                              child: Row(
+                                children: [
+                                  IconButton.outlined(
+                                    key: const Key('decrease_servings'),
+                                    tooltip: '人数を1人減らす',
+                                    onPressed:
+                                        selectedServings >
+                                            activeRecipe.minServings
+                                        ? () =>
+                                              setState(() => selectedServings--)
+                                        : null,
+                                    icon: const Icon(Icons.remove),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      '$selectedServings 人分',
+                                      textAlign: TextAlign.center,
+                                      style: RecipeTheme.readingHeading,
+                                    ),
+                                  ),
+                                  IconButton.outlined(
+                                    key: const Key('increase_servings'),
+                                    tooltip: '人数を1人増やす',
+                                    onPressed:
+                                        selectedServings <
+                                            activeRecipe.maxServings
+                                        ? () =>
+                                              setState(() => selectedServings++)
+                                        : null,
+                                    icon: const Icon(Icons.add),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  '基準 ${activeRecipe.servings}人分',
+                                  style: RecipeTheme.readingNote,
+                                ),
+                                TextButton(
+                                  key: const Key('reset_servings'),
+                                  onPressed:
+                                      selectedServings == activeRecipe.servings
+                                      ? null
+                                      : () => setState(
+                                          () => selectedServings =
+                                              activeRecipe.servings,
+                                        ),
+                                  child: const Text('基準人数に戻す'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      for (final ingredient in ingredientSummaries)
+                        _DetailQuantityRow(
+                          name: ingredient.name,
+                          quantity: ingredient.quantity,
+                          note: [
+                            ingredient.details,
+                            ingredient.note,
+                          ].whereType<String>().join('\n'),
+                        ),
+                      const SizedBox(height: 8),
+                      Text(
+                        activeRecipe.minServings == activeRecipe.maxServings
+                            ? 'このレシピは人数変更できません。${activeRecipe.servingAdjustmentNote}'
+                            : selectedServings == activeRecipe.servings
+                            ? activeRecipe.servingAdjustmentNote
+                            : '材料を$selectedServings人分に換算しています。加熱時間・火加減・器具は自動調整されません。\n${activeRecipe.servingAdjustmentNote}',
+                        key: const Key('serving_adjustment_note'),
+                        style: RecipeTheme.readingNote,
+                      ),
+                    ],
+                  ),
+                  if (utensils.isNotEmpty)
+                    RecipeSection(
+                      title: '器具',
+                      icon: Icons.soup_kitchen_outlined,
+                      titleStyle: RecipeTheme.readingHeading,
+                      children: [
+                        for (final utensil in utensils)
+                          _DetailQuantityRow(
+                            name: utensil['name'] as String,
+                            quantity: '${utensil['quantity']}',
+                            note: utensil['reuse_note'] == null
+                                ? ''
+                                : activeRecipe
+                                      .renderText(
+                                        utensil['reuse_note'] as List<dynamic>,
+                                        cookingContext,
+                                      )
+                                      .displayText,
+                          ),
+                      ],
+                    ),
+                  if (preparation.isNotEmpty)
+                    RecipeSection(
+                      title: '事前準備',
+                      icon: Icons.checklist_outlined,
+                      titleStyle: RecipeTheme.readingHeading,
+                      children: [
+                        if (preparationLoading) const LinearProgressIndicator(),
+                        if (preparationError != null) ...[
+                          Text(
+                            preparationError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                preparationLoading = true;
+                                preparationError = null;
+                              });
+                              _loadPreparation(activeRecipe);
+                            },
+                            child: const Text('再読み込み'),
+                          ),
+                        ],
+                        for (final entry in preparation.indexed)
+                          CheckboxListTile(
+                            key: Key('preparation_${entry.$2['id']}'),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: checkedPreparation.contains(entry.$2['id']),
+                            onChanged:
+                                preparationLoading ||
+                                    preparationSaving ||
+                                    preparationError != null
+                                ? null
+                                : (value) => _setPreparation(
+                                    activeRecipe,
+                                    entry.$2['id'] as String,
+                                    value ?? false,
+                                  ),
+                            title: Text(
+                              activeRecipe
+                                  .renderText(
+                                    entry.$2['text'] as List<dynamic>,
+                                    cookingContext,
+                                  )
+                                  .displayText,
+                              style: RecipeTheme.readingBody,
+                            ),
+                          ),
+                        if (checkedPreparation.isNotEmpty)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              key: const Key('reset_preparation'),
+                              onPressed:
+                                  preparationSaving || preparationError != null
+                                  ? null
+                                  : () => _resetPreparation(activeRecipe),
+                              child: const Text('チェックをリセット'),
+                            ),
+                          ),
+                        const Text(
+                          'チェックはこのバージョンに保存されます。次回の調理前に再確認してください。',
+                          style: RecipeTheme.readingNote,
+                        ),
+                      ],
+                    ),
+                  RecipeSection(
+                    title: '全体工程',
+                    icon: Icons.format_list_numbered_outlined,
+                    titleStyle: RecipeTheme.readingHeading,
+                    children: [
+                      for (final entry in activeRecipe.overview.indexed)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: RecipeTheme.sage,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${entry.$1 + 1}',
+                                  style: RecipeTheme.readingNote.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  activeRecipe
+                                      .renderText(entry.$2, cookingContext)
+                                      .displayText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  RecipeSection(
+                    title: 'タグ',
+                    icon: Icons.sell_outlined,
+                    titleStyle: RecipeTheme.readingHeading,
+                    children: [
+                      if (tags.isEmpty)
+                        const Text('タグはまだありません', style: RecipeTheme.readingNote)
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: tags
+                              .map((tag) => Chip(label: Text(tag)))
+                              .toList(growable: false),
+                        ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => _editTags(context),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('編集'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  CookingEntry(
+                    key: ValueKey(
+                      '${activeRecipe.id}:${activeRecipe.revision}',
+                    ),
+                    recipe: activeRecipe,
+                    controller: controller,
+                    cookingContext: cookingContext,
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('open_feedback'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => FeedbackScreen(
+                          recipeId: activeRecipe.id,
+                          controller: controller,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.rate_review_outlined),
+                    label: const Text('調理後の評価・ChatGPTで改善'),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -534,6 +618,25 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('タグを保存しました。')));
     }
+  }
+
+  Future<void> _useDisplayedRecipe(RecipeDocument recipe) async {
+    if (_activatingRevision) return;
+    setState(() => _activatingRevision = true);
+    final confirmed = await confirmFutureRecipe(context, recipe.revision);
+    if (!mounted) return;
+    if (!confirmed) {
+      setState(() => _activatingRevision = false);
+      return;
+    }
+    final result = await controller.setActiveRevision(
+      recipe.id,
+      recipe.revision,
+    );
+    if (!mounted) return;
+    setState(() => _activatingRevision = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(result.message)));
   }
 }
 

@@ -111,6 +111,12 @@ class _Tags implements RecipeTagStore {
   Future<void> saveTags(String id, List<String> tags) async {}
 }
 
+class _FailingRecordStore extends RecipeCreationStore {
+  @override
+  Future<void> update(String key, Object? value) async =>
+      throw const FileSystemException('write failed');
+}
+
 class _External implements AiRequestPlatform {
   @override
   Future<void> share(String request) async {}
@@ -255,6 +261,98 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+  test(
+    'successful request evidence survives reload without changing Recipe JSON',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'recipe-conditions-test',
+      );
+      try {
+        final file = File('${directory.path}/records.json');
+        flow.dispose();
+        library = RecipeLibraryController(
+          store,
+          _Tags(),
+          RecipeValidator.fromSchemaString(schema),
+          () async => null,
+          creationRecordStore: RecipeCreationStore(file),
+        );
+        await library.load();
+        flow = RecipeCreationController(session, library);
+        await flow.generate(request, request.directText, () async => prompt);
+        final candidate = flow.preview!;
+        await flow.save();
+        expect(store.docs.single, jsonDecode(source));
+        final description = library.creationConditionsFor(
+          candidate.recipeId,
+          candidate.revision,
+        )!;
+        expect(description, contains('使用モデル: a'));
+        expect(description, contains(request.directText));
+        final restored = RecipeLibraryController(
+          store,
+          _Tags(),
+          RecipeValidator.fromSchemaString(schema),
+          () async => null,
+          creationRecordStore: RecipeCreationStore(file),
+        );
+        await restored.load();
+        expect(
+          restored.creationConditionsFor(
+            candidate.recipeId,
+            candidate.revision,
+          ),
+          description,
+        );
+        await restored.recordCreationConditions(
+          candidate.recipeId,
+          candidate.revision,
+          'different later request',
+        );
+        expect(
+          restored.creationConditionsFor(
+            candidate.recipeId,
+            candidate.revision,
+          ),
+          description,
+        );
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'failed regeneration retains the original request and model evidence',
+    () async {
+      await flow.generate(request, 'original condition', () async => prompt);
+      await session.selectModel('b');
+      client.answer = 'broken';
+      await flow.generate(request, 'new condition', () async => prompt);
+      expect(flow.candidateConditions, 'original condition');
+      expect(flow.candidateModel, 'a');
+      expect(flow.candidateRequest, same(request));
+    },
+  );
+  test(
+    'condition write failure reports warning but keeps the saved recipe',
+    () async {
+      flow.dispose();
+      library = RecipeLibraryController(
+        store,
+        _Tags(),
+        RecipeValidator.fromSchemaString(schema),
+        () async => null,
+        creationRecordStore: _FailingRecordStore(),
+      );
+      await library.load();
+      flow = RecipeCreationController(session, library);
+      await flow.generate(request, request.directText, () async => prompt);
+      expect((await flow.save())!.status, RecipeImportStatus.imported);
+      expect(flow.stage, RecipeCreationStage.saved);
+      expect(flow.conditionsSaveWarning, contains('作成条件の記録を保存できません'));
+      expect(store.docs, hasLength(1));
+    },
+  );
   testWidgets(
     'home to creation to save takes three main taps and opens exact recipe',
     (tester) async {
@@ -347,75 +445,125 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
-  testWidgets(
-    'improvement saves and shows the new revision while keeping the active base',
-    (tester) async {
-      final base = feedback['recipe_snapshot'] as Map<String, dynamic>;
-      store.docs.add(base);
-      library = RecipeLibraryController(
-        store,
-        _Tags(),
-        RecipeValidator.fromSchemaString(schema),
-        () async => null,
-      );
-      await library.load();
-      final next = jsonDecode(jsonEncode(base)) as Map<String, dynamic>;
-      final recipe = next['recipe'] as Map;
-      recipe['revision'] =
-          (feedback['revision_request'] as Map)['next_revision'];
-      recipe['parent_revision'] = (base['recipe'] as Map)['revision'];
-      recipe['title'] = '改善したレシピ';
-      client.answer = jsonEncode(next);
-      final improvement = AiRecipeRequest.improve(
-        feedback: feedback,
-        validator: FeedbackValidator.fromSchemaStrings(
-          feedbackSchemaSource: feedbackSchema,
-          recipeSchemaSource: schema,
-        ),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AiRecipeRequestScreen(
-            improvementRequest: improvement,
-            library: library,
-            session: session,
-            prompt: prompt,
+  for (final useFuture in [false, true]) {
+    testWidgets(
+      'improvement saves the displayed revision; explicit future selection=$useFuture',
+      (tester) async {
+        final base = feedback['recipe_snapshot'] as Map<String, dynamic>;
+        store.docs.add(base);
+        library = RecipeLibraryController(
+          store,
+          _Tags(),
+          RecipeValidator.fromSchemaString(schema),
+          () async => null,
+        );
+        await library.load();
+        final next = jsonDecode(jsonEncode(base)) as Map<String, dynamic>;
+        final recipe = next['recipe'] as Map;
+        recipe['revision'] =
+            (feedback['revision_request'] as Map)['next_revision'];
+        recipe['parent_revision'] = (base['recipe'] as Map)['revision'];
+        recipe['title'] = '改善したレシピ';
+        client.answer = jsonEncode(next);
+        final improvement = AiRecipeRequest.improve(
+          feedback: feedback,
+          validator: FeedbackValidator.fromSchemaStrings(
+            feedbackSchemaSource: feedbackSchema,
+            recipeSchemaSource: schema,
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final goal = (feedback['revision_request'] as Map)['goal'];
-      expect(find.text(goal as String), findsOneWidget);
-      expect(find.text('評価から引き継いだ改善の希望'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('connected_ai_text')),
-        250,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.enterText(
-        find.byKey(const Key('connected_ai_text')),
-        '洗い物を少なく',
-      );
-      await tester.tap(find.byKey(const Key('connected_ai_send')));
-      await tester.pumpAndSettle();
-      final sent = jsonDecode(client.sentInput!) as Map;
-      expect(
-        (sent['selected_feedback']['revision_request'] as Map)['goal'],
-        goal,
-      );
-      expect(sent['selected_feedback'], feedback);
-      expect(sent['confirmed_request'], contains('洗い物を少なく'));
-      await tester.tap(find.byKey(const Key('connected_ai_save')));
-      await tester.pumpAndSettle();
-      expect(find.text('改善したレシピ'), findsOneWidget);
-      expect(find.text('表示中のバージョン ${recipe['revision']}'), findsOneWidget);
-      expect(
-        library.activeRecipeFor(recipe['id'] as String)!.revision,
-        recipe['parent_revision'],
-      );
-      expect(store.docs, hasLength(2));
-    },
-  );
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AiRecipeRequestScreen(
+              improvementRequest: improvement,
+              library: library,
+              session: session,
+              prompt: prompt,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final goal = (feedback['revision_request'] as Map)['goal'];
+        expect(find.text(goal as String), findsOneWidget);
+        expect(find.text('評価から引き継いだ改善の希望'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('connected_ai_text')),
+          250,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.enterText(
+          find.byKey(const Key('connected_ai_text')),
+          '洗い物を少なく',
+        );
+        await tester.tap(find.byKey(const Key('connected_ai_send')));
+        await tester.pumpAndSettle();
+        final sent = jsonDecode(client.sentInput!) as Map;
+        expect(
+          (sent['selected_feedback']['revision_request'] as Map)['goal'],
+          goal,
+        );
+        expect(sent['selected_feedback'], feedback);
+        expect(sent['confirmed_request'], contains('洗い物を少なく'));
+        expect(find.text('改善前後の比較'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('candidate_conditions')),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.byKey(const Key('candidate_conditions')));
+        await tester.pumpAndSettle();
+        expect(find.text(goal), findsOneWidget);
+        expect(find.textContaining('使用モデル: a'), findsOneWidget);
+        expect(find.textContaining('追加の希望: 洗い物を少なく'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('previous_recipe_revision')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('connected_ai_preview')), findsOneWidget);
+        expect(find.text('このバージョンを開く'), findsOneWidget);
+        expect(store.docs, hasLength(1));
+        expect(
+          library.activeRecipeFor(recipe['id'] as String)!.revision,
+          recipe['parent_revision'],
+        );
+        await tester.tap(find.byKey(const Key('next_recipe_revision')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            Key(useFuture ? 'use_preview_recipe' : 'connected_ai_save'),
+          ),
+        );
+        if (useFuture) {
+          await tester.pumpAndSettle();
+          expect(store.docs, hasLength(1));
+          await tester.tap(find.byKey(const Key('confirm_future_recipe')));
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('改善したレシピ'), findsOneWidget);
+        expect(
+          find.text('${useFuture ? '使用中' : '表示中'}のバージョン ${recipe['revision']}'),
+          findsOneWidget,
+        );
+        expect(
+          library.activeRecipeFor(recipe['id'] as String)!.revision,
+          useFuture ? recipe['revision'] : recipe['parent_revision'],
+        );
+        expect(store.docs, hasLength(2));
+        expect(
+          library.creationConditionsFor(
+            recipe['id'] as String,
+            recipe['revision'] as int,
+          ),
+          contains(goal),
+        );
+        expect(
+          library.creationConditionsFor(
+            recipe['id'] as String,
+            recipe['revision'] as int,
+          ),
+          contains('洗い物を少なく'),
+        );
+      },
+    );
+  }
 
   test(
     'receive limit and timeout failures preserve the request without saving',

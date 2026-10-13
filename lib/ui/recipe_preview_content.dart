@@ -3,17 +3,20 @@ import 'package:flutter/material.dart';
 import '../application/recipe_library_controller.dart';
 import 'recipe_section.dart';
 import 'recipe_theme.dart';
+import 'recipe_changes_card.dart';
 
 class RecipePreviewContent extends StatelessWidget {
   const RecipePreviewContent({
     required this.preview,
     this.titleKey,
     this.saved = false,
+    this.before,
     super.key,
   });
   final RecipeImportPreview preview;
   final Key? titleKey;
   final bool saved;
+  final RecipeImportPreview? before;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -33,11 +36,15 @@ class RecipePreviewContent extends StatelessWidget {
           const SizedBox(height: 8),
           Text('${preview.servings}人分・約${preview.totalTimeMinutes}分'),
           if (preview.parentRevision != null)
-            Text('第${preview.parentRevision}版から改善した第${preview.revision}版'),
+            Text(
+              'バージョン ${preview.parentRevision}から改善したバージョン ${preview.revision}',
+            ),
           const SizedBox(height: 8),
           Text(saved ? 'このレシピは保存済みです' : 'まだ保存されていません'),
         ],
       ),
+      if (before != null)
+        RecipeChangesCard(comparison: preview.compareWith(before!)),
       RecipeSection(
         title: '材料と分量',
         icon: Icons.restaurant_outlined,

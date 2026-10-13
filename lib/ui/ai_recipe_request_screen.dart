@@ -18,6 +18,8 @@ import 'recipe_ai_settings_screen.dart';
 import 'recipe_detail_screen.dart';
 import 'recipe_import_screen.dart';
 import 'recipe_preview_content.dart';
+import 'recipe_revision_navigator.dart';
+import '../domain/recipe_document.dart';
 import 'recipe_creation_progress.dart';
 import 'recipe_theme.dart';
 import 'recipe_section.dart';
@@ -68,6 +70,8 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
   String? _message;
   final _previewFocus = FocusNode();
   String? _candidateFields;
+  int? _reviewRevision;
+  RecipeImportPreview? _reviewCandidate;
   RecipeCreationStage? _lastStage;
   AiRecipeRequest? _externalRequest;
   Timer? _draftTimer;
@@ -80,6 +84,97 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
       _working ||
       (_flow?.busy ?? false) ||
       _flow?.stage == RecipeCreationStage.saved;
+
+  RecipeImportPreview? get _displayedPreview {
+    final candidate = _flow?.preview;
+    if (candidate == null ||
+        _reviewRevision == null ||
+        _reviewRevision == candidate.revision) {
+      return candidate;
+    }
+    final stored = widget.library!.revisionFor(
+      candidate.recipeId,
+      _reviewRevision!,
+    );
+    return stored == null ? candidate : RecipeImportPreview.forDisplay(stored);
+  }
+
+  RecipeImportPreview? _comparisonBase(RecipeImportPreview displayed) {
+    if (identical(displayed, _flow?.preview)) {
+      final snapshot = _flow?.candidateRequest?.feedback?['recipe_snapshot'];
+      if (snapshot is Map) {
+        return RecipeImportPreview.forDisplay(
+          RecipeDocument.fromValidatedJson(Map<String, dynamic>.from(snapshot)),
+        );
+      }
+    }
+    final parent = displayed.parentRevision;
+    final stored = parent == null
+        ? null
+        : widget.library!.revisionFor(displayed.recipeId, parent);
+    return stored == null ? null : RecipeImportPreview.forDisplay(stored);
+  }
+
+  Widget _conditionsCard() {
+    final flow = _flow!;
+    final feedback = flow.candidateRequest?.feedback;
+    return ExpansionTile(
+      key: const Key('candidate_conditions'),
+      title: const Text('このレシピを作った条件'),
+      childrenPadding: const EdgeInsets.all(16),
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          flow.candidateModel == null
+              ? '貼り付けた回答を形式検証して表示しています。生成元や送信完了はアプリでは確認できません。'
+              : 'ChatGPTの回答を受信し、レシピの形式を検証して表示しています。\n使用モデル: ${flow.candidateModel}',
+        ),
+        if (feedback != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            '改善元: バージョン ${(feedback['recipe_snapshot'] as Map)['recipe']['revision']}',
+          ),
+          const Text('評価から引き継いだ改善の希望'),
+          SelectableText(
+            (feedback['revision_request'] as Map)['goal'] as String,
+          ),
+          Text(
+            flow.candidateModel == null
+                ? '共有用の依頼には、選択した調理後の評価も含めました。'
+                : '選択した調理後の評価も一緒に送っています。',
+          ),
+        ],
+        if (flow.candidateConditions case final conditions?) ...[
+          const SizedBox(height: 12),
+          SelectableText(conditions),
+        ] else
+          const Text('この回答の送信条件は記録されていません。'),
+      ],
+    );
+  }
+
+  Widget _reviewBody(Widget content, bool showing) {
+    final displayed = _displayedPreview;
+    if (!showing || displayed == null) {
+      return content;
+    }
+    final revisions = {
+      for (final recipe in widget.library!.revisionsFor(displayed.recipeId))
+        recipe.revision,
+      _flow!.preview!.revision,
+    }.toList()..sort();
+    if (revisions.length < 2) return content;
+    return RecipeRevisionNavigator(
+      revisions: revisions,
+      current: displayed.revision,
+      enabled: !_busy,
+      onChanged: (value) {
+        setState(() => _reviewRevision = value);
+        if (_scroll.hasClients) _scroll.jumpTo(0);
+      },
+      child: content,
+    );
+  }
 
   @override
   void initState() {
@@ -155,6 +250,10 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
 
   void _changed() {
     if (!mounted) return;
+    if (!identical(_reviewCandidate, _flow?.preview)) {
+      _reviewCandidate = _flow?.preview;
+      _reviewRevision = null;
+    }
     setState(() {});
     final changedStage = _lastStage != _flow?.stage;
     _lastStage = _flow?.stage;
@@ -361,13 +460,60 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
     }
     _flow!.preview = prepared.preview;
     _flow!.candidateConditions = null;
+    _flow!.candidateRequest = _externalRequest ?? _improvement;
+    _flow!.candidateModel = null;
     _flow!.message = null;
     _flow!.diagnostic = null;
     _candidateFields = null;
     _flow!.showPreview();
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool useForFuture = false}) async {
+    if (_busy) return;
+    final chosen = _displayedPreview;
+    if (chosen == null) return;
+    if (useForFuture) {
+      setState(() => _working = true);
+      final confirmed = await confirmFutureRecipe(context, chosen.revision);
+      if (!mounted) return;
+      setState(() => _working = false);
+      if (!confirmed) return;
+    }
+    if (!mounted) return;
+    if (!identical(chosen, _flow!.preview)) {
+      setState(() => _working = true);
+      if (useForFuture) {
+        final result = await widget.library!.setActiveRevision(
+          chosen.recipeId,
+          chosen.revision,
+        );
+        if (!mounted) return;
+        setState(() => _working = false);
+        if (result.status == ActiveRevisionUpdateStatus.failed ||
+            result.status == ActiveRevisionUpdateStatus.notFound) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(result.message)));
+          return;
+        }
+      }
+      if (!mounted) return;
+      setState(() => _working = false);
+      final recipe = widget.library!.revisionFor(
+        chosen.recipeId,
+        chosen.revision,
+      );
+      if (recipe == null) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => RecipeDetailScreen(
+            recipe: recipe,
+            controller: widget.library!,
+            showExactRevision: true,
+          ),
+        ),
+      );
+      return;
+    }
     final result = await _flow!.save();
     if (!mounted ||
         result == null ||
@@ -383,14 +529,31 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
       preview.revision,
     );
     if (recipe == null) return;
+    String? activationMessage;
+    if (useForFuture) {
+      final activation = await widget.library!.setActiveRevision(
+        recipe.id,
+        recipe.revision,
+      );
+      if (!mounted) return;
+      activationMessage =
+          activation.status == ActiveRevisionUpdateStatus.failed ||
+              activation.status == ActiveRevisionUpdateStatus.notFound
+          ? 'レシピは保存しましたが、使用中に切り替えられませんでした。${activation.message}'
+          : '今後使うレシピにしました。';
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result.status == RecipeImportStatus.alreadyExists
-              ? '保存済みのレシピを開きました'
-              : preview.parentRevision == null
-              ? '保存しました'
-              : '新しい版を保存しました。使用中の版は変わっていません',
+          [
+            _flow!.conditionsSaveWarning,
+            activationMessage ??
+                (result.status == RecipeImportStatus.alreadyExists
+                    ? '保存済みのレシピを開きました'
+                    : preview.parentRevision == null
+                    ? '保存しました'
+                    : '新しいバージョンを保存しました。使用中のバージョンは変わっていません'),
+          ].whereType<String>().join('\n'),
         ),
       ),
     );
@@ -662,6 +825,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
   @override
   Widget build(BuildContext context) {
     final flow = _flow;
+    final displayed = _displayedPreview;
     final showing =
         flow != null &&
         [
@@ -695,258 +859,263 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
             children: [
               RecipeCreationProgress(currentStep: stage),
               Expanded(
-                child: ListView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    if (flow?.message ?? _message case final message?)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Semantics(
+                child: _reviewBody(
+                  ListView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (flow?.message ?? _message case final message?)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              message,
+                              key: const Key('ai_request_message'),
+                            ),
+                          ),
+                        ),
+                      if (showing) ...[
+                        if (_candidateFields != null &&
+                            _candidateFields !=
+                                _fields.values.map((f) => f.text).join('\n'))
+                          const Text(
+                            '表示中のレシピは変更前の条件で作りました。編集した条件はまだ反映されていません。',
+                          ),
+                        Focus(
+                          focusNode: _previewFocus,
+                          child: RecipePreviewContent(
+                            preview: displayed!,
+                            before: _comparisonBase(displayed),
+                            saved: widget.library!.isStoredPreview(displayed),
+                            titleKey: const Key('connected_ai_preview'),
+                          ),
+                        ),
+                        if (identical(displayed, flow.preview))
+                          _conditionsCard(),
+                      ] else if (generating) ...[
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 24),
+                        Semantics(
                           liveRegion: true,
-                          child: Text(
-                            message,
-                            key: const Key('ai_request_message'),
-                          ),
+                          child: Text(switch (flow!.stage) {
+                            RecipeCreationStage.starting => '作成を開始しています',
+                            RecipeCreationStage.validating => '届いた内容を確認しています',
+                            _ => 'レシピを作っています',
+                          }, style: Theme.of(context).textTheme.titleLarge),
                         ),
-                      ),
-                    if (showing) ...[
-                      if (_candidateFields != null &&
-                          _candidateFields !=
-                              _fields.values.map((f) => f.text).join('\n'))
-                        const Text('表示中のレシピは変更前の条件で作りました。編集した条件はまだ反映されていません。'),
-                      Focus(
-                        focusNode: _previewFocus,
-                        child: RecipePreviewContent(
-                          preview: flow.preview!,
-                          saved: widget.library!.isStoredPreview(flow.preview!),
-                          titleKey: const Key('connected_ai_preview'),
+                        const SizedBox(height: 16),
+                        Text(
+                          '経過 ${flow.elapsedSeconds}秒',
+                          semanticsLabel: '作成の経過時間',
                         ),
-                      ),
-                      if (flow.candidateConditions case final conditions?)
-                        ExpansionTile(
-                          title: const Text('このレシピを作った条件'),
-                          children: [Text(conditions)],
+                        Text('使用モデル: ${_modelName()}'),
+                        if (flow.elapsedSeconds >= 30)
+                          const Text('時間がかかっています。そのまま待つか、中止できます。'),
+                        TextButton(
+                          onPressed: flow.cancel,
+                          child: const Text('作成を中止'),
                         ),
-                    ] else if (generating) ...[
-                      const LinearProgressIndicator(),
-                      const SizedBox(height: 24),
-                      Semantics(
-                        liveRegion: true,
-                        child: Text(switch (flow!.stage) {
-                          RecipeCreationStage.starting => '作成を開始しています',
-                          RecipeCreationStage.validating => '届いた内容を確認しています',
-                          _ => 'レシピを作っています',
-                        }, style: Theme.of(context).textTheme.titleLarge),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '経過 ${flow.elapsedSeconds}秒',
-                        semanticsLabel: '作成の経過時間',
-                      ),
-                      Text('使用モデル: ${_modelName()}'),
-                      if (flow.elapsedSeconds >= 30)
-                        const Text('時間がかかっています。そのまま待つか、中止できます。'),
-                      TextButton(
-                        onPressed: flow.cancel,
-                        child: const Text('作成を中止'),
-                      ),
-                    ] else ...[
-                      if (!_ready) const LinearProgressIndicator(),
-                      if (_session?.client.canInfer == true)
-                        Card(
-                          color: RecipeTheme.sage,
-                          margin: EdgeInsets.zero,
-                          elevation: 0,
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            leading: const Icon(
-                              Icons.link,
-                              color: RecipeTheme.forest,
-                            ),
-                            title: const Text('ChatGPT 接続済み'),
-                            subtitle: Text(
-                              _session!.model == null
-                                  ? '使用するモデルを設定してください'
-                                  : '使用モデル: ${_modelName()}',
-                            ),
-                            trailing: TextButton(
-                              onPressed: _busy ? null : _settings,
-                              child: const Text('変更'),
-                            ),
-                          ),
-                        )
-                      else ...[
-                        const Text('ChatGPTを接続すると、この画面でレシピを作れます'),
-                        OutlinedButton(
-                          onPressed: !_ready || _busy ? null : _settings,
-                          child: const Text('接続する'),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      if (_improvement == null) ...[
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 18),
-                          child: Text(
-                            '使いたい食材から、今日のひと皿を。',
-                            style: TextStyle(
-                              color: RecipeTheme.forest,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        _basicConditions(),
-                        _optionalConditions(),
                       ] else ...[
-                        RecipeSection(
-                          title: '評価から引き継いだ改善の希望',
-                          icon: Icons.auto_stories_outlined,
-                          color: RecipeTheme.sage,
+                        if (!_ready) const LinearProgressIndicator(),
+                        if (_session?.client.canInfer == true)
+                          Card(
+                            color: RecipeTheme.sage,
+                            margin: EdgeInsets.zero,
+                            elevation: 0,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              leading: const Icon(
+                                Icons.link,
+                                color: RecipeTheme.forest,
+                              ),
+                              title: const Text('ChatGPT 接続済み'),
+                              subtitle: Text(
+                                _session!.model == null
+                                    ? '使用するモデルを設定してください'
+                                    : '使用モデル: ${_modelName()}',
+                              ),
+                              trailing: TextButton(
+                                onPressed: _busy ? null : _settings,
+                                child: const Text('変更'),
+                              ),
+                            ),
+                          )
+                        else ...[
+                          const Text('ChatGPTを接続すると、この画面でレシピを作れます'),
+                          OutlinedButton(
+                            onPressed: !_ready || _busy ? null : _settings,
+                            child: const Text('接続する'),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        if (_improvement == null) ...[
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 18),
+                            child: Text(
+                              '使いたい食材から、今日のひと皿を。',
+                              style: TextStyle(
+                                color: RecipeTheme.forest,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          _basicConditions(),
+                          _optionalConditions(),
+                        ] else ...[
+                          RecipeSection(
+                            title: '評価から引き継いだ改善の希望',
+                            icon: Icons.auto_stories_outlined,
+                            color: RecipeTheme.sage,
+                            children: [
+                              Text(
+                                '改善元: ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['title']}（バージョン ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['revision']}）',
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                (_improvement!.feedback!['revision_request']
+                                        as Map)['goal']
+                                    as String,
+                                key: const Key('inherited_improvement_goal'),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text('この改善内容と選択した評価を送ります。下の欄では希望を追加できます。'),
+                            ],
+                          ),
+                        ],
+                        if (_improvement != null) _wishes(),
+                        if (flow?.preview != null) ...[
+                          const Text('前の条件で作ったレシピを保持しています。再作成に成功すると入れ替わります。'),
+                          TextButton(
+                            onPressed: flow!.showPreview,
+                            child: const Text('前のレシピを確認'),
+                          ),
+                        ],
+                        ExpansionTile(
+                          key: const Key('alternative_methods'),
+                          backgroundColor: Colors.white,
+                          collapsedBackgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          collapsedShape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          leading: const Icon(
+                            Icons.article_outlined,
+                            color: RecipeTheme.forest,
+                          ),
+                          title: const Text('別の方法で作る'),
                           children: [
-                            Text(
-                              '改善元: ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['title']}（バージョン ${((_improvement!.feedback!['recipe_snapshot'] as Map)['recipe'] as Map)['revision']}）',
+                            if (!widget.publicReady)
+                              const Text(
+                                publicAiPendingMessage,
+                                key: Key('ai_publication_pending'),
+                              ),
+                            OutlinedButton.icon(
+                              key: const Key('share_ai_request'),
+                              onPressed: _busy || !widget.publicReady
+                                  ? null
+                                  : () => _externalSend(false),
+                              icon: const Icon(Icons.share_outlined),
+                              label: const Text('ChatGPTへ共有'),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              (_improvement!.feedback!['revision_request']
-                                      as Map)['goal']
-                                  as String,
-                              key: const Key('inherited_improvement_goal'),
+                            TextButton(
+                              key: const Key('copy_ai_request'),
+                              onPressed: _busy || !widget.publicReady
+                                  ? null
+                                  : () => _externalSend(true),
+                              child: const Text('依頼文をコピーしてChatGPTを開く'),
                             ),
-                            const SizedBox(height: 12),
-                            const Text('この改善内容と選択した評価を送ります。下の欄では希望を追加できます。'),
+                          ],
+                        ),
+                        if (_external && widget.library != null)
+                          OutlinedButton(
+                            onPressed: _busy ? null : _paste,
+                            child: const Text('回答を貼り付ける'),
+                          ),
+                        ExpansionTile(
+                          title: const Text('詳細'),
+                          children: [
+                            const Text(
+                              '音声入力はAndroidのサービスを使い、ネット通信が発生する場合があります。',
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                final request = _request();
+                                if (request == null) return;
+                                showDialog<void>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('送信内容の詳細'),
+                                    content: SingleChildScrollView(
+                                      child: SelectableText(request.text),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('閉じる'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              child: const Text('送信内容の詳細'),
+                            ),
+                            TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () async {
+                                      for (final e in _fields.entries) {
+                                        e.value.text = e.key == 'servings'
+                                            ? '2'
+                                            : e.key == 'time_minutes'
+                                            ? '30'
+                                            : '';
+                                      }
+                                      await _session!.saveDraft(null);
+                                      if (mounted) {
+                                        setState(
+                                          () => _message = '条件の下書きを削除しました。',
+                                        );
+                                      }
+                                    },
+                              child: const Text('条件の下書きを削除'),
+                            ),
                           ],
                         ),
                       ],
-                      if (_improvement != null) _wishes(),
-                      if (flow?.preview != null) ...[
-                        const Text('前の条件で作ったレシピを保持しています。再作成に成功すると入れ替わります。'),
+                      if (_session?.persistenceWarning case final warning?)
+                        Text(warning),
+                      if (!showing &&
+                          !generating &&
+                          flow?.failureKind == SiwcFailureKind.authentication)
                         TextButton(
-                          onPressed: flow!.showPreview,
-                          child: const Text('前のレシピを確認'),
+                          onPressed: _settings,
+                          child: const Text('再接続する'),
                         ),
-                      ],
-                      ExpansionTile(
-                        key: const Key('alternative_methods'),
-                        backgroundColor: Colors.white,
-                        collapsedBackgroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                      if (!showing &&
+                          !generating &&
+                          flow?.failureKind == SiwcFailureKind.permission)
+                        TextButton(
+                          onPressed: () async {
+                            try {
+                              await _session!.client.openUsage();
+                            } catch (_) {}
+                          },
+                          child: const Text('利用状況を確認'),
                         ),
-                        collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                      if (flow?.diagnostic case final diagnostic?)
+                        ExpansionTile(
+                          title: const Text('診断詳細'),
+                          children: [Text(diagnostic)],
                         ),
-                        leading: const Icon(
-                          Icons.article_outlined,
-                          color: RecipeTheme.forest,
-                        ),
-                        title: const Text('別の方法で作る'),
-                        children: [
-                          if (!widget.publicReady)
-                            const Text(
-                              publicAiPendingMessage,
-                              key: Key('ai_publication_pending'),
-                            ),
-                          OutlinedButton.icon(
-                            key: const Key('share_ai_request'),
-                            onPressed: _busy || !widget.publicReady
-                                ? null
-                                : () => _externalSend(false),
-                            icon: const Icon(Icons.share_outlined),
-                            label: const Text('ChatGPTへ共有'),
-                          ),
-                          TextButton(
-                            key: const Key('copy_ai_request'),
-                            onPressed: _busy || !widget.publicReady
-                                ? null
-                                : () => _externalSend(true),
-                            child: const Text('依頼文をコピーしてChatGPTを開く'),
-                          ),
-                        ],
-                      ),
-                      if (_external && widget.library != null)
-                        OutlinedButton(
-                          onPressed: _busy ? null : _paste,
-                          child: const Text('回答を貼り付ける'),
-                        ),
-                      ExpansionTile(
-                        title: const Text('詳細'),
-                        children: [
-                          const Text('音声入力はAndroidのサービスを使い、ネット通信が発生する場合があります。'),
-                          TextButton(
-                            onPressed: () {
-                              final request = _request();
-                              if (request == null) return;
-                              showDialog<void>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('送信内容の詳細'),
-                                  content: SingleChildScrollView(
-                                    child: SelectableText(request.text),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('閉じる'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            child: const Text('送信内容の詳細'),
-                          ),
-                          TextButton(
-                            onPressed: _busy
-                                ? null
-                                : () async {
-                                    for (final e in _fields.entries) {
-                                      e.value.text = e.key == 'servings'
-                                          ? '2'
-                                          : e.key == 'time_minutes'
-                                          ? '30'
-                                          : '';
-                                    }
-                                    await _session!.saveDraft(null);
-                                    if (mounted) {
-                                      setState(
-                                        () => _message = '条件の下書きを削除しました。',
-                                      );
-                                    }
-                                  },
-                            child: const Text('条件の下書きを削除'),
-                          ),
-                        ],
-                      ),
                     ],
-                    if (_session?.persistenceWarning case final warning?)
-                      Text(warning),
-                    if (!showing &&
-                        !generating &&
-                        flow?.failureKind == SiwcFailureKind.authentication)
-                      TextButton(
-                        onPressed: _settings,
-                        child: const Text('再接続する'),
-                      ),
-                    if (!showing &&
-                        !generating &&
-                        flow?.failureKind == SiwcFailureKind.permission)
-                      TextButton(
-                        onPressed: () async {
-                          try {
-                            await _session!.client.openUsage();
-                          } catch (_) {}
-                        },
-                        child: const Text('利用状況を確認'),
-                      ),
-                    if (flow?.diagnostic case final diagnostic?)
-                      ExpansionTile(
-                        title: const Text('診断詳細'),
-                        children: [Text(diagnostic)],
-                      ),
-                  ],
+                  ),
+                  showing,
                 ),
               ),
               if (showing || (!generating && widget.library != null))
@@ -986,7 +1155,9 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                             : _generate,
                         child: Text(
                           showing
-                              ? flow.stage == RecipeCreationStage.saving
+                              ? !identical(displayed, flow.preview)
+                                    ? 'このバージョンを開く'
+                                    : flow.stage == RecipeCreationStage.saving
                                     ? '保存しています'
                                     : flow.stage == RecipeCreationStage.saved
                                     ? '保存しました'
@@ -1000,6 +1171,14 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                               : 'この条件でレシピを作る',
                         ),
                       ),
+                      if (showing)
+                        OutlinedButton(
+                          key: const Key('use_preview_recipe'),
+                          onPressed: _busy
+                              ? null
+                              : () => _save(useForFuture: true),
+                          child: const Text('今後使うレシピにする'),
+                        ),
                       if (showing)
                         TextButton(
                           onPressed: _busy ? null : flow.edit,

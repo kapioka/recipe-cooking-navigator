@@ -78,6 +78,9 @@ Future<void> main() async {
     photoStore: FileRecipePhotoStore(
       Directory('${supportDirectory.path}/recipe-photos-v1'),
     ),
+    creationRecordStore: RecipeCreationStore(
+      File('${supportDirectory.path}/recipe-creation-records-v1.json'),
+    ),
   );
   await controller.load();
 

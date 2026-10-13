@@ -445,6 +445,82 @@ void main() {
     expect(tile.value, isTrue);
   });
 
+  testWidgets(
+    'swipe browses history; explicit activation preserves cooking progress',
+    (tester) async {
+      final first = jsonDecode(recipeSource) as Map<String, dynamic>;
+      final second = jsonDecode(recipeSource) as Map<String, dynamic>;
+      second['recipe']['revision'] = 2;
+      second['recipe']['parent_revision'] = 1;
+      second['recipe']['title'] = '改善した生姜焼き';
+      final id = first['recipe']['id'] as String;
+      final versions = MemoryRecipeVersionStateStore({id: 2});
+      final cooking = CookingStore();
+      final controller = RecipeLibraryController(
+        _MemoryRecipeDocumentStore([first, second]),
+        _MemoryRecipeTagStore(),
+        RecipeValidator.fromSchemaString(schemaSource),
+        () async => null,
+        recipeVersionStateStore: versions,
+        cookingStore: cooking,
+      );
+      await controller.load();
+      final base = controller.revisionFor(id, 1)!;
+      await cooking.startCooking(
+        base,
+        base.contextFor(2),
+        base.steps[0]['id'] as String,
+      );
+      final progress = jsonEncode(await cooking.read());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RecipeTheme.light,
+          home: RecipeDetailScreen(
+            recipe: controller.activeRecipeFor(id)!,
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('改善前後の比較'), findsOneWidget);
+      await tester.drag(
+        find.byKey(const Key('recipe_revision_swipe')),
+        const Offset(180, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('豚の生姜焼き'), findsOneWidget);
+      expect(find.text('表示中のバージョン 1'), findsOneWidget);
+      expect(controller.activeRecipeFor(id)!.revision, 2);
+      expect(jsonEncode(await cooking.read()), progress);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('use_displayed_recipe')),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byKey(const Key('use_displayed_recipe')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('キャンセル'));
+      await tester.pumpAndSettle();
+      expect(controller.activeRecipeFor(id)!.revision, 2);
+      await tester.tap(find.byKey(const Key('use_displayed_recipe')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm_future_recipe')));
+      await tester.pumpAndSettle();
+      expect(controller.activeRecipeFor(id)!.revision, 1);
+      expect(jsonEncode(await cooking.read()), progress);
+      final reloaded = RecipeLibraryController(
+        _MemoryRecipeDocumentStore([first, second]),
+        _MemoryRecipeTagStore(),
+        RecipeValidator.fromSchemaString(schemaSource),
+        () async => null,
+        recipeVersionStateStore: versions,
+      );
+      await reloaded.load();
+      expect(reloaded.activeRecipeFor(id)!.revision, 1);
+      expect(controller.revisionsFor(id), hasLength(2));
+    },
+  );
+
   testWidgets('shows version history and uses the selected active revision', (
     tester,
   ) async {
@@ -728,9 +804,20 @@ void main() {
       await tester.tap(find.text('豚の生姜焼き'));
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('increase_servings')),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('increase_servings')));
       await tester.tap(find.byKey(const Key('increase_servings')));
       await tester.pump();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('selected_servings_chip')),
+        -150,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('4人分'), findsOneWidget);
       expect(find.textContaining('材料を4人分に換算'), findsOneWidget);
 
@@ -747,6 +834,7 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('start_cooking')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('cooking_servings')), findsOneWidget);
@@ -965,6 +1053,7 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('start_cooking')));
     await tester.pumpAndSettle();
     expect(find.text('画面操作の説明'), findsOneWidget);

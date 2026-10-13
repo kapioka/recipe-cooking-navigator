@@ -11,8 +11,10 @@ import '../data/recipe_document_store.dart';
 import '../data/recipe_inbox_state_store.dart';
 import '../data/recipe_tag_store.dart';
 import '../data/recipe_photo_store.dart';
+import '../data/recipe_creation_store.dart';
 import '../data/recipe_version_state_store.dart';
 import '../domain/recipe_document.dart';
+import '../domain/recipe_comparison.dart';
 import '../domain/recipe_inbox.dart';
 import '../domain/recipe_validator.dart';
 import '../domain/search_text.dart';
@@ -25,6 +27,12 @@ enum RecipeImportPreparationStatus { ready, cancelled, failed }
 
 class RecipeImportPreview {
   const RecipeImportPreview._(this._document);
+
+  /// Read-only display; confirmPreparedImport still requires a pending candidate.
+  factory RecipeImportPreview.forDisplay(RecipeDocument document) =>
+      RecipeImportPreview._(document);
+  RecipeComparison compareWith(RecipeImportPreview before) =>
+      RecipeComparison(before._document, _document);
 
   final RecipeDocument _document;
   String get source => jsonEncode(_document.raw);
@@ -168,6 +176,7 @@ class RecipeLibraryController extends ChangeNotifier {
     RecipeVersionStateStore? recipeVersionStateStore,
     RecipeArchiveStore? archiveStore,
     RecipePhotoStore? photoStore,
+    RecipeCreationStore? creationRecordStore,
     this.legacyDataPresent = false,
   }) : assert(
          (recipeInboxPlatform == null) == (recipeInboxStateStore == null),
@@ -180,10 +189,39 @@ class RecipeLibraryController extends ChangeNotifier {
        _recipeVersionStateStore =
            recipeVersionStateStore ?? MemoryRecipeVersionStateStore(),
        _archiveStore = archiveStore ?? RecipeArchiveStore(),
-       _photoStore = photoStore ?? MemoryRecipePhotoStore();
+       _photoStore = photoStore ?? MemoryRecipePhotoStore(),
+       _creationRecordStore = creationRecordStore ?? RecipeCreationStore();
 
   final CookingStore cookingStore;
   final PreparationChecklistStore preparationStore;
+  final RecipeCreationStore _creationRecordStore;
+  Map<String, dynamic> _creationRecords = {};
+  String? _creationRecordError;
+  String _creationKey(String id, int revision) => jsonEncode([id, revision]);
+  String? creationConditionsFor(String id, int revision) =>
+      _creationRecords[_creationKey(id, revision)] as String?;
+  String? get creationRecordError => _creationRecordError;
+
+  /// Keep request evidence outside the Recipe exchange document, never inferred
+  /// from the model's response. A failed metadata write does not undo a recipe.
+  Future<String?> recordCreationConditions(
+    String id,
+    int revision,
+    String text,
+  ) => _synchronizeLibraryMutation(() async {
+    if (_creationRecordError != null) return _creationRecordError;
+    if (revisionFor(id, revision) == null) return 'レシピが見つからないため、作成条件を保存していません。';
+    final key = _creationKey(id, revision);
+    if (_creationRecords[key] != null) return null;
+    try {
+      await _creationRecordStore.update(key, text);
+      _creationRecords[key] = text;
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'レシピは保存しましたが、作成条件の記録を保存できませんでした。';
+    }
+  });
   final bool legacyDataPresent;
 
   RecipeDocument? revisionFor(String id, int revision) {
@@ -398,6 +436,17 @@ class RecipeLibraryController extends ChangeNotifier {
         _inboxFolder = null;
         _loadError ??= 'Inboxの接続情報を読み込めませんでした。';
       }
+    }
+    try {
+      final records = await _creationRecordStore.load();
+      if (records.values.any((value) => value != null && value is! String)) {
+        throw const FormatException('Invalid creation conditions');
+      }
+      _creationRecords = records;
+      _creationRecordError = null;
+    } catch (_) {
+      _creationRecords = {};
+      _creationRecordError = '作成条件の記録を読み込めません。保存済みレシピは変更していません。';
     }
     _photos.clear();
     _photoErrors.clear();
@@ -1090,6 +1139,8 @@ class RecipeLibraryController extends ChangeNotifier {
             await preparationStore.checked(recipeId, revision.revision);
           }
           await _archiveStore.load();
+          if (_creationRecordError != null) throw const FormatException();
+          await _creationRecordStore.load();
         } catch (_) {
           return '関連データを読み込めないため、削除していません。';
         }
@@ -1100,6 +1151,13 @@ class RecipeLibraryController extends ChangeNotifier {
           await preparationStore.deleteRecipe(recipeId);
           await _tagStore.saveTags(recipeId, const []);
           await _photoStore.save(recipeId, null);
+          for (final revision in revisionsFor(recipeId)) {
+            final key = _creationKey(recipeId, revision.revision);
+            if (_creationRecords[key] != null) {
+              await _creationRecordStore.update(key, null);
+              _creationRecords.remove(key);
+            }
+          }
           await (versionStore as RecipeVersionStateDeletionStore).deleteRecipe(
             recipeId,
           );
