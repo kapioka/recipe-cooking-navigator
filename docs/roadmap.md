@@ -4,8 +4,8 @@
 
 ## Current-state contract
 
-- Implementation baseline: `8eab5ba8bea7ed8e89090f335ba8bdf516f69aa8`（PR #13の本体連携。端末で生成・確認保存を検証済み。mergeの公開状態は同PRを参照）
-- Reconciled: 2026-10-11
+- Implementation baseline: `f939b70d04ffb445b4ec6cd36322f39c24eeeac4`（`fadcd8a`上の0.2.6 (8)。最新版UIを維持した再作成・共有・下準備・コツ表示）
+- Reconciled: 2026-10-31
 - 現在の実装状態そのものは`main`のコード、tests、build結果が正本。
 - このroadmapは、その状態を短く再開できるように要約する現在地・未達Outcomeの正本。
 - Issue、PR、commit、Releaseは履歴・証拠であり、現在の再開地点を決める正本ではない。
@@ -22,6 +22,8 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 ## Current status
 
+- 2026-10-31: 0.2.6 (8)の未公開ソースを`codex/restore-current-ui-and-sharing`へ集約。本体302テスト、PoC26テスト、両静的解析、formatter、Android debug buildに合格。既存の正式署名APKも署名・package・0.2.6 (8)を検証した。GitHubへの反映対象はソースと残作業の記録であり、main統合・tag・新Release・端末更新は別。公開対象と未確認項目は[最新版ソースと公開範囲](plans/github-publication-2026-10-31.md)を参照。
+
 - 2026-10-25: 作業文を短くし、理由・コツ・失敗対策は既存の`adjustments`へ分離する生成方針を追加。生成プレビュー・詳細で独立表示し、下準備・調理画面では任意に同じ画面内で開ける。Recipe v2・既存Revision・通常TTSは維持。アプリ内生成と接続先Projectの指示へ共通適用。実生成文の読みやすさと実料理での作業性はUser device/manual acceptance: pending。
 
 - 2026-10-18追加: 既存SSEの受信開始を画面へ通知し、回答待ち/受信中/形式確認中と経過時間を表示。進捗問い合わせ・追加推論は行わない。formatter・本体/PoC静的解析・本体296テスト・PoC26テスト・正式署名buildに合格。Pixel 10aを0.2.3 (5)へデータ保持更新し、生成APKとのSHA-256一致・起動・致命的例外なし・回転設定0/0維持を確認。実際のChatGPT往復での表示確認はUser device/manual acceptance: pending。
@@ -30,9 +32,9 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 - 2026-10-12 UI/UX改善: 条件からの直接作成、設定分離、作成中止・遅着無視、結果専用表示、保存再試行と保存版詳細、端末内下書き・モデル記憶、ホームと取り込み導線を実装。検証結果と端末QAの残件は [UI/UX実装記録](plans/ui-ux-recipe-creation-implementation-2026-10-12.md)。作業ブランチの変更であり、main公開・配布済みを意味しない。
 
-Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映対象にはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoC、公開SIWCを使った本体のレシピ生成・Revision改善が含まれる。
+Flutter / Android版。mainにはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoC、本体のレシピ生成・Revision改善と画面改善が反映済み。今回の開発版はそのmainを土台にする。配布中のGitHub Releaseは0.2.1であり、開発版0.2.6とは区別する。
 
-本体201テスト、共有adapterのPoC23テストと両静的解析、formatter、正式署名buildが合格。本体の署名APKをPixelへデータを保持して更新し、起動・致命的例外なし・回転設定0/0を確認。端末の実料理/音声品質・Kitchen背景動作・Profile実運用は未確認。SIWC PoCではOAuth・モデル一覧・完了回答の受信をユーザーが確認。本体生成/Revision改善は正本Schema/Workflowと共通Validator・材料/工程プレビュー・確認保存へ合流し、改善元ID/parent/next_revision、activeと過去Versionを保持する。形式指示をinstructions、希望・選択Feedbackをinputへ分離し、HTTP 400となったtext.format指定は除去した。本文を表示しない形式/HTTP診断を追加し、最新APKでRecipe生成→プレビュー→確認保存の成功をユーザーが確認。承認済みのPR #13 main mergeへ進める。選択Version改善・音声入力・期限更新等の端末QAは未確認。入力欄直下は音声入力と確定送信の2ボタンで、枠内編集の説明を配置した。
+本体生成→プレビュー→確認保存とPoC認証の過去の実機確認は[チェックポイント](plans/issues-7-8-checkpoint.md)を参照。今回の機械検証は上記の0.2.6を対象とし、実料理・音声品質・Kitchen背景動作・Profile実運用、今回追加した導線の最終実機確認は未確認として残す。
 
 ## Execution notes
 

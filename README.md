@@ -2,7 +2,9 @@
 
 ChatGPTなどで生成した構造化レシピをスマートフォンへ取り込み、調理前の全体把握、ハンズフリー調理、調理後評価、ChatGPTによる再改善までを一続きで支援することを目指す公開プロジェクトです。
 
-> Status: Android version (`0.2.1`) / レシピ作成・取り込み、調理、評価・改善の主要フローを実装済み
+> Status: Android開発版 `0.2.6 (8)` / 配布中のGitHub Releaseは `0.2.1`
+
+開発版には、生成失敗時の明示的な作り直し、受信状況表示、下準備からの画面点灯、評価なしのレシピ共有、コツ・失敗対策の別表示を含みます。検証結果と残作業は[最新版ソースと公開範囲](docs/plans/github-publication-2026-10-31.md)を参照してください。
 
 Android用APKは[GitHub Release](https://github.com/kapioka/recipe-cooking-navigator/releases/tag/v0.2.1)からダウンロードできます。
 
