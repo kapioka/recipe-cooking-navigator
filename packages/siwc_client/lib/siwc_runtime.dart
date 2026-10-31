@@ -443,6 +443,7 @@ class SiwcRuntime {
     String model,
     String confirmedText, {
     String? instructions,
+    void Function()? onReceiving,
   }) async {
     final body = inferenceBody(
       model,
@@ -461,6 +462,9 @@ class SiwcRuntime {
       final result = await network.infer(
         _active!['access_token'] as String,
         body,
+        onReceiving: () {
+          if (epoch == _epoch) onReceiving?.call();
+        },
       );
       _check(epoch);
       return result;

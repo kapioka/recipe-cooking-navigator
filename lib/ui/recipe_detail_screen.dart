@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../application/recipe_library_controller.dart';
 import '../domain/recipe_document.dart';
 import 'cooking_entry.dart';
+import 'preparation_checklist.dart';
+import 'recipe_sharing.dart';
 import 'feedback_screen.dart';
 import 'recipe_section.dart';
 import 'recipe_heading.dart';
@@ -34,10 +36,8 @@ class RecipeDetailScreen extends StatefulWidget {
 class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   late int selectedServings = widget.recipe.servings;
   late String activeIdentity = '${widget.recipe.id}:${widget.recipe.revision}';
-  Set<String> checkedPreparation = {};
-  bool preparationLoading = true;
+  int preparationVersion = 0;
   bool preparationSaving = false;
-  String? preparationError;
   int? _browsingRevision;
   bool _activatingRevision = false;
   bool _showDetailedSteps = false;
@@ -47,92 +47,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   };
 
   RecipeLibraryController get controller => widget.controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPreparation(widget.recipe);
-  }
-
-  Future<void> _loadPreparation(RecipeDocument recipe) async {
-    final identity = '${recipe.id}:${recipe.revision}';
-    try {
-      final checked = await controller.preparationStore.checked(
-        recipe.id,
-        recipe.revision,
-      );
-      final validIds = (recipe.recipeData['preparation'] as List<dynamic>)
-          .map((item) => (item as Map<String, dynamic>)['id'] as String)
-          .toSet();
-      if (!validIds.containsAll(checked)) {
-        throw const FormatException('保存済みの事前準備がRecipeと一致しません。');
-      }
-      if (mounted && identity == activeIdentity) {
-        setState(() {
-          checkedPreparation = checked;
-          preparationLoading = false;
-          preparationError = null;
-        });
-      }
-    } catch (_) {
-      if (mounted && identity == activeIdentity) {
-        setState(() {
-          preparationLoading = false;
-          preparationError = '事前準備を読み込めません。保存状態は変更していません。';
-        });
-      }
-    }
-  }
-
-  Future<void> _setPreparation(
-    RecipeDocument recipe,
-    String taskId,
-    bool checked,
-  ) async {
-    if (preparationSaving || preparationError != null) return;
-    setState(() => preparationSaving = true);
-    try {
-      await controller.preparationStore.setChecked(
-        recipe.id,
-        recipe.revision,
-        taskId,
-        checked,
-      );
-      if (mounted && activeIdentity == '${recipe.id}:${recipe.revision}') {
-        setState(() {
-          checkedPreparation = {...checkedPreparation};
-          if (checked) {
-            checkedPreparation.add(taskId);
-          } else {
-            checkedPreparation.remove(taskId);
-          }
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => preparationError = '事前準備を保存できません。チェック状態は変更していません。');
-      }
-    } finally {
-      if (mounted) setState(() => preparationSaving = false);
-    }
-  }
-
-  Future<void> _resetPreparation(RecipeDocument recipe) async {
-    if (preparationSaving || preparationError != null) return;
-    setState(() => preparationSaving = true);
-    try {
-      await controller.preparationStore.reset(recipe.id, recipe.revision);
-      if (mounted && activeIdentity == '${recipe.id}:${recipe.revision}') {
-        setState(() => checkedPreparation = {});
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => preparationError = '事前準備をリセットできません。保存状態は変更していません。');
-      }
-    } finally {
-      if (mounted) setState(() => preparationSaving = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,11 +68,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         if (identity != activeIdentity) {
           activeIdentity = identity;
           selectedServings = activeRecipe.servings;
-          checkedPreparation = {};
-          _showDetailedSteps = false;
-          preparationLoading = true;
-          preparationError = null;
-          _loadPreparation(activeRecipe);
         }
         final cookingContext = activeRecipe.contextFor(selectedServings);
         final ingredientSummaries = activeRecipe.ingredientSummaries(
@@ -190,6 +99,15 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           appBar: AppBar(
             title: const Text('レシピ詳細'),
             actions: [
+              RecipeShareMenu(
+                key: const Key('share_recipe'),
+                recipe: activeRecipe,
+                onAdjust: () => openRecipeAdjustment(
+                  context,
+                  recipe: activeRecipe,
+                  library: controller,
+                ),
+              ),
               IconButton(
                 key: const Key('edit_recipe_tags_button'),
                 tooltip: 'タグを編集',
@@ -500,71 +418,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           icon: Icons.checklist_outlined,
                           titleStyle: RecipeTheme.readingHeading,
                           children: [
-                            if (preparationLoading)
-                              const LinearProgressIndicator(),
-                            if (preparationError != null) ...[
-                              Text(
-                                preparationError!,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    preparationLoading = true;
-                                    preparationError = null;
-                                  });
-                                  _loadPreparation(activeRecipe);
-                                },
-                                child: const Text('再読み込み'),
-                              ),
-                            ],
-                            for (final entry in preparation.indexed)
-                              CheckboxListTile(
-                                key: Key('preparation_${entry.$2['id']}'),
-                                contentPadding: EdgeInsets.zero,
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                value: checkedPreparation.contains(
-                                  entry.$2['id'],
-                                ),
-                                onChanged:
-                                    preparationLoading ||
-                                        preparationSaving ||
-                                        preparationError != null
-                                    ? null
-                                    : (value) => _setPreparation(
-                                        activeRecipe,
-                                        entry.$2['id'] as String,
-                                        value ?? false,
-                                      ),
-                                title: Text(
-                                  activeRecipe
-                                      .renderText(
-                                        entry.$2['text'] as List<dynamic>,
-                                        cookingContext,
-                                      )
-                                      .displayText,
-                                  style: RecipeTheme.readingBody,
-                                ),
-                              ),
-                            if (checkedPreparation.isNotEmpty)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  key: const Key('reset_preparation'),
-                                  onPressed:
-                                      preparationSaving ||
-                                          preparationError != null
-                                      ? null
-                                      : () => _resetPreparation(activeRecipe),
-                                  child: const Text('チェックをリセット'),
-                                ),
-                              ),
-                            const Text(
-                              'チェックはこのバージョンに保存されます。次回の調理前に再確認してください。',
-                              style: RecipeTheme.readingNote,
+                            PreparationChecklist(
+                              key: ValueKey('$identity:$preparationVersion'),
+                              recipe: activeRecipe,
+                              cookingContext: cookingContext,
+                              store: controller.preparationStore,
+                              showHeading: false,
+                              onBusy: (value) =>
+                                  setState(() => preparationSaving = value),
                             ),
                           ],
                         ),
@@ -647,8 +508,31 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           ),
                         ],
                       ),
+                      if (preview.adjustmentDetails.isNotEmpty)
+                        RecipeSection(
+                          key: _changeSections['調整・注意'],
+                          title: 'コツ・失敗対策',
+                          icon: Icons.tune,
+                          children: [
+                            for (final (index, line)
+                                in preview.adjustmentDetails.indexed)
+                              RecipeComparedText(
+                                text: line,
+                                before: comparison
+                                    ?.changeFor('adjustment:$index')
+                                    ?.before,
+                                compared:
+                                    comparison
+                                        ?.changeFor('adjustment:$index')
+                                        ?.after ==
+                                    line,
+                              ),
+                          ],
+                        ),
                       RecipeSection(
-                        key: _changeSections['調整・注意'],
+                        key: preview.adjustmentDetails.isEmpty
+                            ? _changeSections['調整・注意']
+                            : null,
                         title: '調理・保存の注意',
                         icon: Icons.info_outline,
                         color: RecipeTheme.warningSurface,
@@ -662,19 +546,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                               compared:
                                   comparison
                                       ?.changeFor(preview.noticeKeys[index])
-                                      ?.after ==
-                                  line,
-                            ),
-                          for (final (index, line)
-                              in preview.adjustmentDetails.indexed)
-                            RecipeComparedText(
-                              text: line,
-                              before: comparison
-                                  ?.changeFor('adjustment:$index')
-                                  ?.before,
-                              compared:
-                                  comparison
-                                      ?.changeFor('adjustment:$index')
                                       ?.after ==
                                   line,
                             ),
@@ -715,19 +586,36 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                         recipe: activeRecipe,
                         controller: controller,
                         cookingContext: cookingContext,
+                        onReturned: () => setState(() => preparationVersion++),
                       ),
-                      OutlinedButton.icon(
-                        key: const Key('open_feedback'),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => FeedbackScreen(
-                              recipeId: activeRecipe.id,
-                              controller: controller,
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            key: const Key('adjust_recipe'),
+                            onPressed: () => openRecipeAdjustment(
+                              context,
+                              recipe: activeRecipe,
+                              library: controller,
                             ),
+                            icon: const Icon(Icons.auto_fix_high_outlined),
+                            label: const Text('ChatGPTで調整'),
                           ),
-                        ),
-                        icon: const Icon(Icons.rate_review_outlined),
-                        label: const Text('調理後の評価・ChatGPTで改善'),
+                          OutlinedButton.icon(
+                            key: const Key('open_feedback'),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => FeedbackScreen(
+                                  recipeId: activeRecipe.id,
+                                  controller: controller,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(Icons.rate_review_outlined),
+                            label: const Text('調理後の評価'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

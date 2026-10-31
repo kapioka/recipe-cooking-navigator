@@ -84,6 +84,7 @@ class _Client implements RecipeAiClient {
     String model,
     String prompt, {
     required String instructions,
+    void Function()? onReceiving,
   }) async {
     prompts.add(prompt);
     instructionsSent.add(instructions);
@@ -127,7 +128,7 @@ void main() {
   late RecipeLibraryController library;
   final request = AiRecipeRequest.generate(
     ingredients: '卵',
-    servings: 1,
+    servings: 2,
     utensils: 'フライパン',
     taste: '',
     timeMinutes: 10,
@@ -164,6 +165,10 @@ void main() {
     expect(text.instructions, contains(jsonEncode(jsonDecode(schema))));
     expect(text.instructions, isNot(contains('Google Drive Recipe Inbox')));
     expect(text.instructions, contains('食品安全'));
+    expect(text.instructions, contains('### 6.2 作業文とコツ・失敗対策を分ける'));
+    expect(text.instructions, contains('既存の`adjustments`へ分ける'));
+    expect(text.instructions, contains('約4cm・基準2人分'));
+    expect(text.instructions, isNot(contains('同じ項目に書く')));
     expect(text.instructions, isNot(contains('編集後の希望')));
     expect(text.input, contains('"confirmed_request":"編集後の希望"'));
     expect(text.input, isNot(contains('selected_feedback')));

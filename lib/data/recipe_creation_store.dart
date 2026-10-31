@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Local creation metadata only. Credentials and generated answers never enter this file.
+/// Local creation metadata only. Credentials never enter this file. Only the last rejected answer is retained for explicit repair/update recovery.
 class RecipeCreationStore {
   RecipeCreationStore([this.file]);
   final File? file;

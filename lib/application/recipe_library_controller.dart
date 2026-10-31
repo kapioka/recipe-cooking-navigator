@@ -204,12 +204,14 @@ class RecipeImportPreparation {
     required this.message,
     this.preview,
     this.errorCode,
+    this.issue,
   });
 
   final RecipeImportPreparationStatus status;
   final String message;
   final RecipeImportPreview? preview;
   final RecipeImportErrorCode? errorCode;
+  final RecipeImportException? issue;
 }
 
 class RecipeImportResult {
@@ -627,6 +629,8 @@ class RecipeLibraryController extends ChangeNotifier {
       return RecipeImportPreparation(
         status: RecipeImportPreparationStatus.failed,
         message: error.message,
+        errorCode: error.code,
+        issue: error,
       );
     } on RecipeStorageException catch (error) {
       _finishPreparedImport();
@@ -672,6 +676,7 @@ class RecipeLibraryController extends ChangeNotifier {
           status: RecipeImportPreparationStatus.failed,
           message: error.message,
           errorCode: error.code,
+          issue: error,
         );
       }
     }
@@ -693,6 +698,7 @@ class RecipeLibraryController extends ChangeNotifier {
         status: RecipeImportPreparationStatus.failed,
         message: error.message,
         errorCode: error.code,
+        issue: error,
       );
     } catch (_) {
       _finishPreparedImport();

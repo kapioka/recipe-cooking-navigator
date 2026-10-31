@@ -19,7 +19,11 @@ class AiRequestChannel(activity: Activity, messenger: BinaryMessenger) {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, text)
                         }
-                        activity.startActivity(Intent.createChooser(send, "ChatGPTへ依頼"))
+                        activity.startActivity(Intent.createChooser(send, "共有先を選択"))
+                        result.success(null)
+                    }
+                    "openAppUpdates" -> {
+                        activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/kapioka/recipe-cooking-navigator/releases/latest")))
                         result.success(null)
                     }
                     "openChatGpt" -> {

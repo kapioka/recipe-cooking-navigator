@@ -69,7 +69,11 @@ abstract class SiwcNetwork {
     Map<String, String> fields, {
     bool emptyOk = false,
   });
-  Future<String> infer(String bearer, Map<String, dynamic> body);
+  Future<String> infer(
+    String bearer,
+    Map<String, dynamic> body, {
+    void Function()? onReceiving,
+  });
   void cancel();
 }
 
@@ -155,7 +159,11 @@ class HttpSiwcNetwork implements SiwcNetwork {
   }
 
   @override
-  Future<String> infer(String bearer, Map<String, dynamic> body) async {
+  Future<String> infer(
+    String bearer,
+    Map<String, dynamic> body, {
+    void Function()? onReceiving,
+  }) async {
     final request = await _open('POST', Uri.parse('$resource/responses'));
     request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearer');
     request.headers.contentType = ContentType.json;
@@ -188,6 +196,7 @@ class HttpSiwcNetwork implements SiwcNetwork {
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .timeout(const Duration(seconds: 40)),
+        onReceiving: onReceiving,
         onCompleted: (streamChars, textChars) => onDiagnostic?.call(
           'RCN_AI_RECEIVE stream_chars=$streamChars text_chars=$textChars',
         ),

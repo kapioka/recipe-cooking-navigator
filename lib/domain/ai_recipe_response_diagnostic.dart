@@ -28,7 +28,7 @@ String describeAiRecipeFailure(String source, RecipeImportErrorCode code) {
       }
     }
   }
-  return 'AIの回答が対応するレシピ形式になっていません。保存していません。もう一度「確定して送信」をお試しください。'
+  return 'AIの回答が対応するレシピ形式になっていません。保存していません。この画面で形式を直して作り直せます。'
       '\n形式確認: $kind / 受信文字: ${source.length}'
       '${offset == null ? '' : ' / 構文位置: $offset'}';
 }

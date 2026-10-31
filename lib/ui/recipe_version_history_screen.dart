@@ -1,3 +1,5 @@
+import 'recipe_sharing.dart';
+
 import 'package:flutter/material.dart';
 
 import '../application/recipe_library_controller.dart';
@@ -56,7 +58,15 @@ class _RecipeVersionHistoryScreenState
         displayed.revision,
       );
       return Scaffold(
-        appBar: AppBar(title: const Text('バージョン履歴')),
+        appBar: AppBar(
+          title: const Text('バージョン履歴'),
+          actions: [
+            RecipeShareMenu(
+              key: const Key('share_history_recipe'),
+              recipe: displayed,
+            ),
+          ],
+        ),
         body: SafeArea(
           child: Column(
             children: [
@@ -136,6 +146,18 @@ class _RecipeVersionHistoryScreenState
                           saved: true,
                         ),
                         OutlinedButton.icon(
+                          key: Key('recreate_revision_${displayed.revision}'),
+                          onPressed: _savingRevision != null
+                              ? null
+                              : () => openRecipeAdjustment(
+                                  context,
+                                  recipe: displayed,
+                                  library: widget.controller,
+                                ),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('このバージョンを調整'),
+                        ),
+                        OutlinedButton.icon(
                           key: Key('improve_revision_${displayed.revision}'),
                           onPressed: _savingRevision != null
                               ? null
@@ -150,7 +172,7 @@ class _RecipeVersionHistoryScreenState
                                   ),
                                 ),
                           icon: const Icon(Icons.auto_fix_high_outlined),
-                          label: const Text('このバージョンをChatGPTで調整'),
+                          label: const Text('調理結果から改善'),
                         ),
                         const SizedBox(height: 8),
                         FilledButton(

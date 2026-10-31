@@ -89,7 +89,7 @@ Windowsでは親パス`E:\\作ってみた`の非ASCII文字をAndroid Gradle Pl
 次は明示的な仕様変更タスクでない限り維持してください。
 
 - ChatGPT -> AppはRecipe JSONのみを機械受け渡しに使う。
-- App -> ChatGPTはFeedback JSONのみを機械受け渡しに使う。
+- App -> ChatGPTは、調理結果を使う改善にはFeedback JSON、評価なしの調整・再作成やレシピ単体の共有には選択VersionのRecipe JSONを使う。未記入の評価や調理記録を捏造しない。
 - 機械受け渡しJSONへ人間向けMarkdownや説明文を混ぜない。
 - UIでは`JSON`を主要なユーザー向け名称として使わず、`ChatGPTレシピを取り込む`等の理解しやすい表現を優先する。
 - 不正JSON、必須項目欠落、未対応Schemaを推測補完しない。fail-closedを基本とする。
