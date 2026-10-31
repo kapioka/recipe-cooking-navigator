@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../application/kitchen_controller.dart';
 import '../data/cooking_store.dart';
+import '../data/preparation_checklist_store.dart';
+import 'preparation_checklist.dart';
 import '../domain/cooking_context.dart';
 import '../domain/kitchen_timer.dart';
 import '../domain/recipe_document.dart';
 import '../platform/cooking_device.dart';
 import 'kitchen_scope.dart';
 import 'recipe_theme.dart';
+import 'recipe_tips.dart';
 
 class CookingScreen extends StatefulWidget {
   const CookingScreen({
@@ -17,6 +20,7 @@ class CookingScreen extends StatefulWidget {
     required this.store,
     required this.initialIndex,
     required this.cookingContext,
+    this.preparationStore,
     this.kitchenController,
     this.performKitchenOperation,
     super.key,
@@ -25,6 +29,7 @@ class CookingScreen extends StatefulWidget {
   final CookingStore store;
   final int initialIndex;
   final CookingContext cookingContext;
+  final PreparationChecklistStore? preparationStore;
   final KitchenController? kitchenController;
   final KitchenOperation? performKitchenOperation;
   @override
@@ -32,6 +37,7 @@ class CookingScreen extends StatefulWidget {
 }
 
 class _CookingScreenState extends State<CookingScreen> {
+  late bool preparing = widget.preparationStore != null;
   late int index = widget.initialIndex;
   late final device = CookingDevice();
   final scroll = ScrollController();
@@ -102,7 +108,7 @@ class _CookingScreenState extends State<CookingScreen> {
     device.onEvent = _event;
     _invoke('wake');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && !preparing) {
         _showInitialHelp();
       }
     });
@@ -157,7 +163,7 @@ class _CookingScreenState extends State<CookingScreen> {
   }
 
   void _event(String method, dynamic value) {
-    if (!mounted) return;
+    if (!mounted || preparing) return;
     if (method == 'voiceState') {
       setState(() {
         voiceState = value as String;
@@ -1088,6 +1094,11 @@ class _CookingScreenState extends State<CookingScreen> {
 
   Future<void> _exit(bool complete) async {
     if (busy) return;
+    if (preparing) {
+      setState(() => busy = true);
+      await _closeFlow();
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1117,15 +1128,7 @@ class _CookingScreenState extends State<CookingScreen> {
       if (complete) {
         await widget.store.complete(widget.recipe.id, widget.recipe.revision);
       }
-      await _invoke('close');
-      if (mounted) {
-        setState(() => allowPop = true);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            Navigator.of(context).pop();
-          }
-        });
-      }
+      await _closeFlow();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1136,8 +1139,129 @@ class _CookingScreenState extends State<CookingScreen> {
     }
   }
 
+  Future<void> _closeFlow() async {
+    await _invoke('close');
+    if (!mounted) return;
+    setState(() => allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  Future<void> _beginSteps() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.store.startCooking(
+        widget.recipe,
+        widget.cookingContext,
+        steps.first['id'] as String,
+      );
+      if (!mounted) return;
+      setState(() => preparing = false);
+      await _showInitialHelp();
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = '調理位置を保存できませんでした。下準備から進んでいません。もう一度操作してください。');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Widget _preparationScreen() => PopScope(
+    canPop: allowPop,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _exit(false);
+    },
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('下準備'),
+        leading: IconButton(
+          tooltip: 'レシピ詳細へ戻る',
+          onPressed: busy ? null : () => _exit(false),
+          icon: const Icon(Icons.arrow_back),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: FilledButton(
+            key: const Key('begin_cooking_steps'),
+            onPressed: busy ? null : _beginSteps,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+            ),
+            child: const Text('調理工程へ進む'),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (busy) const LinearProgressIndicator(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Text(
+                    widget.recipe.title,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  Text(
+                    'Version ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分',
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('下準備から調理終了まで、表示中は画面を点灯したままにします。'),
+                  const SizedBox(height: 20),
+                  Text('材料', style: Theme.of(context).textTheme.titleLarge),
+                  for (final ingredient in widget.recipe.ingredientSummaries(
+                    widget.cookingContext,
+                  ))
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(ingredient.name),
+                      subtitle: Text(
+                        [
+                          ingredient.quantity,
+                          if (ingredient.details != null) ingredient.details!,
+                          if (ingredient.note != null) ingredient.note!,
+                        ].join('\n'),
+                      ),
+                    ),
+                  PreparationChecklist(
+                    recipe: widget.recipe,
+                    cookingContext: widget.cookingContext,
+                    store: widget.preparationStore!,
+                  ),
+                  RecipeTips(
+                    recipe: widget.recipe,
+                    cookingContext: widget.cookingContext,
+                  ),
+                ],
+              ),
+            ),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (preparing) return _preparationScreen();
     final timerSeconds = step['timer_seconds'] as int?;
     final heat = step['heat'] == null
         ? null
@@ -1428,6 +1552,11 @@ class _CookingScreenState extends State<CookingScreen> {
                                   '次の工程：${widget.recipe.renderText(step['next_preview'] as List<dynamic>, widget.cookingContext).displayText}',
                                   style: const TextStyle(fontSize: 16),
                                 ),
+                              RecipeTips(
+                                key: ValueKey('tips_${step['id']}'),
+                                recipe: widget.recipe,
+                                cookingContext: widget.cookingContext,
+                              ),
                             ],
                           ),
                         ),

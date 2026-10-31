@@ -181,10 +181,10 @@ class _RecipePreviewContentState extends State<RecipePreviewContent> {
                 ),
           ],
         ),
-        if (preview.adjustmentDetails.isNotEmpty && historyComparison)
+        if (preview.adjustmentDetails.isNotEmpty)
           RecipeSection(
             key: _sections['調整・注意'],
-            title: '調整のヒント',
+            title: 'コツ・失敗対策',
             icon: Icons.tune,
             children: [
               for (final (index, line) in preview.adjustmentDetails.indexed)
@@ -193,7 +193,7 @@ class _RecipePreviewContentState extends State<RecipePreviewContent> {
           ),
         if (preview.notices.isNotEmpty)
           RecipeSection(
-            key: preview.adjustmentDetails.isNotEmpty && historyComparison
+            key: preview.adjustmentDetails.isNotEmpty
                 ? null
                 : _sections['調整・注意'],
             title: '調理・保存の注意',

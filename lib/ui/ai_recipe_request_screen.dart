@@ -20,6 +20,7 @@ import 'recipe_import_screen.dart';
 import 'recipe_preview_content.dart';
 import 'recipe_revision_navigator.dart';
 import '../domain/recipe_document.dart';
+import '../domain/recipe_validator.dart';
 import 'recipe_creation_progress.dart';
 import 'recipe_theme.dart';
 import 'recipe_section.dart';
@@ -80,6 +81,9 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
           ? widget.improvementRequest
           : null) ??
       (widget.initialRequest?.feedback != null ? widget.initialRequest : null);
+  AiRecipeRequest? get _recreation =>
+      widget.initialRequest?.recreation != null ? widget.initialRequest : null;
+  AiRecipeRequest? get _baseRequest => _improvement ?? _recreation;
   bool get _busy =>
       _working ||
       (_flow?.busy ?? false) ||
@@ -226,7 +230,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
     final draft =
         widget.initialRequest?.conditions ??
         widget.improvementRequest?.conditions ??
-        (_improvement == null ? _session!.draft : null);
+        (_baseRequest == null ? _session!.draft : null);
     if (draft != null) {
       for (final entry in _fields.entries) {
         final value = draft[entry.key];
@@ -237,6 +241,37 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
         _session!.interruptedResult = false;
       }
     }
+    if (widget.initialRequest == null && widget.improvementRequest == null) {
+      _flow?.restoreRejected();
+      if (_flow?.rejectedRequest != null) {
+        _externalRequest = _flow!.rejectedRequest;
+        _external = true;
+        // A newly installed app may now support the retained template. Check it
+        // locally before asking ChatGPT to regenerate; never auto-save/send.
+        if (_flow!.importIssue?.receivedSchemaVersion ==
+            supportedRecipeSchemaVersion) {
+          final restored = await prepareAiRecipe(
+            widget.library!,
+            _externalRequest!,
+            _flow!.rejectedSource!,
+          );
+          if (!mounted) {
+            if (restored.preview case final abandoned?) {
+              widget.library!.cancelPreparedImport(abandoned);
+            }
+            return;
+          }
+          if (restored.preview != null) {
+            _flow!.preview = restored.preview;
+            _flow!.candidateRequest = _externalRequest;
+            await _flow!.clearRejected();
+            if (!mounted) return;
+            _flow!.message = null;
+            _flow!.showPreview();
+          }
+        }
+      }
+    }
     setState(() => _ready = true);
   }
 
@@ -245,7 +280,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
     'hasResult': _flow?.preview != null || (_flow?.generating ?? false),
   };
   Future<void> _persist() async {
-    if (_improvement == null) await _session!.saveDraft(_draft);
+    if (_baseRequest == null) await _session!.saveDraft(_draft);
   }
 
   void _changed() {
@@ -274,7 +309,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
 
   AiRecipeRequest? _request({bool validate = true}) {
     _errors.clear();
-    if (_improvement != null) return _improvement;
+    if (_baseRequest != null) return _baseRequest;
     final servings = int.tryParse(_fields['servings']!.text) ?? 0;
     final minutes = int.tryParse(_fields['time_minutes']!.text) ?? 0;
     if (_fields['ingredients']!.text.trim().isEmpty) {
@@ -301,7 +336,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
     );
   }
 
-  String _conditions(AiRecipeRequest request) => _improvement == null
+  String _conditions(AiRecipeRequest request) => _baseRequest == null
       ? request.directText
       : '${request.directText}\n追加の希望: ${_fields['instructions']!.text}';
 
@@ -412,7 +447,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
     if (request == null) return;
     setState(() => _working = true);
     try {
-      final text = _improvement == null
+      final text = _baseRequest == null
           ? request.text
           : '${request.text}\n追加の希望: ${_fields['instructions']!.text}';
       if (copy) {
@@ -455,17 +490,59 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
       return;
     }
     if (prepared.preview == null) {
-      setState(() => _message = prepared.message);
+      await _flow!.rejectAnswer(
+        request,
+        source,
+        _conditions(request),
+        prepared,
+      );
+      if (mounted) setState(() {});
       return;
     }
+    await _flow!.clearRejected();
+    if (!mounted) return;
     _flow!.preview = prepared.preview;
     _flow!.candidateConditions = null;
-    _flow!.candidateRequest = _externalRequest ?? _improvement;
+    _flow!.candidateRequest = _externalRequest ?? _baseRequest;
     _flow!.candidateModel = null;
     _flow!.message = null;
     _flow!.diagnostic = null;
     _candidateFields = null;
     _flow!.showPreview();
+  }
+
+  Future<void> _repair() async {
+    if (_busy || _flow?.canRepair != true) return;
+    if (_external && _session?.client.canInfer != true) {
+      if (!widget.publicReady) return;
+      final flow = _flow!;
+      final request = flow.rejectedRequest!.repairAnswer(
+        flow.rejectedSource!,
+        flow.rejectedProblem ?? flow.message ?? '形式不一致',
+        flow.rejectedConditions!,
+      );
+      await Clipboard.setData(ClipboardData(text: request.text));
+      _externalRequest = request;
+      try {
+        await widget.platform.openChatGpt();
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _flow!.message = '修正依頼をコピーしました。ChatGPTで貼り付けて送信してください。');
+      }
+      return;
+    }
+    await _flow!.repair(_prompt);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _checkAppUpdates() async {
+    try {
+      await openRecipeAppUpdates();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = '更新ページを開けませんでした。$recipeAppReleasesUrl');
+      }
+    }
   }
 
   Future<void> _save({bool useForFuture = false}) async {
@@ -521,7 +598,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
       return;
     }
     _draftTimer?.cancel();
-    if (_improvement == null) await _session!.saveDraft(null);
+    if (_baseRequest == null) await _session!.saveDraft(null);
     if (!mounted) return;
     final preview = _flow!.preview!;
     final recipe = widget.library!.revisionFor(
@@ -670,7 +747,11 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
           ),
         ),
         onChanged: (_) {
-          setState(() => _errors.remove(key));
+          setState(() {
+            _errors.remove(key);
+            _flow?.message = null;
+          });
+          if (_flow?.rejectedSource != null) unawaited(_flow!.clearRejected());
           _draftTimer?.cancel();
           _draftTimer = Timer(const Duration(milliseconds: 250), _persist);
         },
@@ -849,8 +930,10 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
           title: Text(
             showing
                 ? 'レシピの内容確認'
-                : _improvement == null
+                : _baseRequest == null
                 ? 'レシピを作る'
+                : _recreation != null
+                ? 'レシピを作り直す'
                 : 'レシピを改善',
           ),
         ),
@@ -875,6 +958,20 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                             ),
                           ),
                         ),
+                      if (flow?.importIssue?.code ==
+                          RecipeImportErrorCode.unsupportedSchemaVersion) ...[
+                        Text(
+                          '受信したレシピ形式: ${flow!.importIssue!.receivedSchemaVersion} ／ このアプリの対応形式: $supportedRecipeSchemaVersion',
+                        ),
+                        const Text(
+                          '料理内容のVersionとは別の、レシピ形式の版です。配布ページで対応形式を確認してください。',
+                        ),
+                        OutlinedButton(
+                          key: const Key('check_recipe_app_update'),
+                          onPressed: _busy ? null : _checkAppUpdates,
+                          child: const Text('アプリの更新を確認'),
+                        ),
+                      ],
                       if (showing) ...[
                         if (_candidateFields != null &&
                             _candidateFields !=
@@ -899,9 +996,12 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                         Semantics(
                           liveRegion: true,
                           child: Text(switch (flow!.stage) {
-                            RecipeCreationStage.starting => '作成を開始しています',
-                            RecipeCreationStage.validating => '届いた内容を確認しています',
-                            _ => 'レシピを作っています',
+                            RecipeCreationStage.starting => '依頼を準備しています',
+                            RecipeCreationStage.validating => 'レシピの形式を確認しています',
+                            _ =>
+                              flow.receivingAnswer
+                                  ? '回答を受信中です'
+                                  : 'ChatGPTの回答を待っています',
                           }, style: Theme.of(context).textTheme.titleLarge),
                         ),
                         const SizedBox(height: 16),
@@ -952,7 +1052,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                           ),
                         ],
                         const SizedBox(height: 16),
-                        if (_improvement == null) ...[
+                        if (_baseRequest == null) ...[
                           const Padding(
                             padding: EdgeInsets.only(bottom: 18),
                             child: Text(
@@ -965,6 +1065,18 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                           ),
                           _basicConditions(),
                           _optionalConditions(),
+                        ] else if (_recreation != null) ...[
+                          RecipeSection(
+                            title: 'このレシピを元に作り直す',
+                            icon: Icons.auto_fix_high_outlined,
+                            color: RecipeTheme.sage,
+                            children: [
+                              Text(_recreation!.directText),
+                              const Text(
+                                '元のVersionを残して、新しいVersionとして保存します。調理後の評価は不要です。',
+                              ),
+                            ],
+                          ),
                         ] else ...[
                           RecipeSection(
                             title: '評価から引き継いだ改善の希望',
@@ -986,7 +1098,7 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                             ],
                           ),
                         ],
-                        if (_improvement != null) _wishes(),
+                        if (_baseRequest != null) _wishes(),
                         if (flow?.preview != null) ...[
                           const Text('前の条件で作ったレシピを保持しています。再作成に成功すると入れ替わります。'),
                           TextButton(
@@ -1147,11 +1259,18 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                             _busy ||
                                 !_ready ||
                                 (!showing &&
-                                    (_session?.client.canInfer != true ||
-                                        _session?.model == null))
+                                    (flow?.importIssue?.needsAppUpdate ==
+                                            true ||
+                                        (_session?.client.canInfer != true &&
+                                            (!_external ||
+                                                !widget.publicReady)) ||
+                                        (_session?.model == null &&
+                                            !_external)))
                             ? null
                             : showing
                             ? _save
+                            : flow?.canRepair == true
+                            ? _repair
                             : _generate,
                         child: Text(
                           showing
@@ -1168,6 +1287,8 @@ class _AiRecipeRequestScreenState extends State<AiRecipeRequestScreen>
                                       )
                                     ? '保存済みのレシピを開く'
                                     : 'このレシピを保存'
+                              : flow?.canRepair == true
+                              ? '形式を直して作り直す'
                               : 'この条件でレシピを作る',
                         ),
                       ),

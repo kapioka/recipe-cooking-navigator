@@ -15,6 +15,7 @@ class RecipeAiSession extends ChangeNotifier {
   bool voiceExplained = false;
   Map<String, dynamic>? draft;
   bool interruptedResult = false;
+  Map<String, dynamic>? rejectedRecipe;
   String? persistenceWarning;
 
   Future<void> initialize() => _initialized
@@ -32,6 +33,9 @@ class RecipeAiSession extends ChangeNotifier {
           ? Map<String, dynamic>.from(data['draft'] as Map)
           : null;
       interruptedResult = draft?['hasResult'] == true;
+      rejectedRecipe = data['rejectedRecipe'] is Map
+          ? Map<String, dynamic>.from(data['rejectedRecipe'] as Map)
+          : null;
     } catch (_) {
       persistenceWarning = '条件の下書きを読み込めませんでした。';
     }
@@ -70,6 +74,11 @@ class RecipeAiSession extends ChangeNotifier {
   Future<void> saveDraft(Map<String, dynamic>? value) {
     draft = value;
     return persist('draft', value);
+  }
+
+  Future<void> saveRejectedRecipe(Map<String, dynamic>? value) {
+    rejectedRecipe = value;
+    return persist('rejectedRecipe', value);
   }
 
   @override

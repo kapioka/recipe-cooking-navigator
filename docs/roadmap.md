@@ -22,6 +22,12 @@ roadmapとコードが矛盾する場合は、確認できたコード・tests�
 
 ## Current status
 
+- 2026-10-25: 作業文を短くし、理由・コツ・失敗対策は既存の`adjustments`へ分離する生成方針を追加。生成プレビュー・詳細で独立表示し、下準備・調理画面では任意に同じ画面内で開ける。Recipe v2・既存Revision・通常TTSは維持。アプリ内生成と接続先Projectの指示へ共通適用。実生成文の読みやすさと実料理での作業性はUser device/manual acceptance: pending。
+
+- 2026-10-18追加: 既存SSEの受信開始を画面へ通知し、回答待ち/受信中/形式確認中と経過時間を表示。進捗問い合わせ・追加推論は行わない。formatter・本体/PoC静的解析・本体296テスト・PoC26テスト・正式署名buildに合格。Pixel 10aを0.2.3 (5)へデータ保持更新し、生成APKとのSHA-256一致・起動・致命的例外なし・回転設定0/0維持を確認。実際のChatGPT往復での表示確認はUser device/manual acceptance: pending。
+
+- 2026-10-18: 最新main `fadcd8a`を土台に、形式検証後の明示的な再作成、直近の拒否回答/依頼の端末内復元、テンプレート形式差のアプリ更新案内、評価を必要としない選択Versionからの再作成を追加。Issue #19の下準備からの点灯制御も統合。formatter・静的解析・全292テストに合格。正式署名の0.2.2 (4)をPixel 10aへデータ保持更新し、起動・背景復帰・回転設定0/0維持・致命的例外なしを確認。端末内APKのSHA-256は生成物と一致（`978d60850ce8dfe8a6ceaa868ac158f815c3cf1041e112d79b03af3a070a6cf4`）。実際のChatGPT往復と下準備の消灯待ちはUser device/manual acceptance: pending。GitHubへのpush・main統合・Release公開はこの作業に含めない。
+
 - 2026-10-12 UI/UX改善: 条件からの直接作成、設定分離、作成中止・遅着無視、結果専用表示、保存再試行と保存版詳細、端末内下書き・モデル記憶、ホームと取り込み導線を実装。検証結果と端末QAの残件は [UI/UX実装記録](plans/ui-ux-recipe-creation-implementation-2026-10-12.md)。作業ブランチの変更であり、main公開・配布済みを意味しない。
 
 Flutter / Android版。公開済みの初期版0.1.0に加え、今回の反映対象にはRecipe/Feedback v2、人数変更、評価・改善、Kitchen基盤、Profile履歴、標準共有/コピー依頼、独立SIWC PoC、公開SIWCを使った本体のレシピ生成・Revision改善が含まれる。

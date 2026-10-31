@@ -14,11 +14,13 @@ class CookingEntry extends StatefulWidget {
     required this.recipe,
     required this.controller,
     required this.cookingContext,
+    this.onReturned,
     super.key,
   });
   final RecipeDocument recipe;
   final RecipeLibraryController controller;
   final CookingContext cookingContext;
+  final VoidCallback? onReturned;
   @override
   State<CookingEntry> createState() => _CookingEntryState();
 }
@@ -99,7 +101,7 @@ class _CookingEntryState extends State<CookingEntry> {
         builder: (context) => AlertDialog(
           title: const Text('最初から始めますか？'),
           content: Text(
-            'バージョン ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の先頭から開始します。現在の途中位置を更新します。',
+            'バージョン ${widget.recipe.revision}・${widget.cookingContext.targetServings}人分の下準備を開きます。工程へ進むと現在の途中位置を更新します。',
           ),
           actions: [
             TextButton(
@@ -123,13 +125,6 @@ class _CookingEntryState extends State<CookingEntry> {
     final cookingContext = resume ? savedContext! : widget.cookingContext;
     setState(() => busy = true);
     try {
-      if (!resume) {
-        await widget.controller.cookingStore.startCooking(
-          recipe,
-          cookingContext,
-          recipe.steps[index]['id'] as String,
-        );
-      }
       if (!mounted) {
         return;
       }
@@ -141,11 +136,15 @@ class _CookingEntryState extends State<CookingEntry> {
             store: widget.controller.cookingStore,
             initialIndex: index,
             cookingContext: cookingContext,
+            preparationStore: resume
+                ? null
+                : widget.controller.preparationStore,
             kitchenController: kitchen?.controller,
             performKitchenOperation: kitchen?.perform,
           ),
         ),
       );
+      if (mounted) widget.onReturned?.call();
       await _load();
     } catch (_) {
       if (mounted) {

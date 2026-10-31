@@ -17,6 +17,7 @@ abstract class RecipeAiClient {
     String model,
     String input, {
     required String instructions,
+    void Function()? onReceiving,
   });
   Future<bool> disconnect();
   Future<void> openUsage();
@@ -63,7 +64,13 @@ class AndroidRecipeAiClient implements RecipeAiClient {
     String model,
     String input, {
     required String instructions,
-  }) => _runtime.infer(model, input, instructions: instructions);
+    void Function()? onReceiving,
+  }) => _runtime.infer(
+    model,
+    input,
+    instructions: instructions,
+    onReceiving: onReceiving,
+  );
   @override
   Future<bool> disconnect() => _runtime.disconnect();
   @override

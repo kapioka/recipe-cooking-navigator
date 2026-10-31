@@ -1,5 +1,11 @@
 import 'package:flutter/services.dart';
 
+const recipeAppReleasesUrl =
+    'https://github.com/kapioka/recipe-cooking-navigator/releases/latest';
+Future<void> openRecipeAppUpdates() =>
+    const MethodChannel('recipe/ai-request')
+        .invokeMethod<void>('openAppUpdates');
+
 abstract class AiRequestPlatform {
   Future<void> share(String request);
   Future<void> openChatGpt();

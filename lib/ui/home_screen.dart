@@ -1,3 +1,5 @@
+import '../platform/ai_request_platform.dart';
+import '../domain/recipe_validator.dart';
 import 'recipe_section.dart';
 
 import 'package:flutter/material.dart';
@@ -389,9 +391,22 @@ class HomeScreenState extends State<HomeScreen> {
     }
     if (preparation.status == RecipeImportPreparationStatus.cancelled) return;
     if (preparation.status == RecipeImportPreparationStatus.failed) {
-      _showImportResult(
-        context,
-        RecipeImportResult(RecipeImportStatus.failed, preparation.message),
+      final issue = preparation.issue;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(preparation.message),
+          duration: const Duration(seconds: 15),
+          action: issue?.code == RecipeImportErrorCode.unsupportedSchemaVersion
+              ? SnackBarAction(
+                  label: 'アプリの更新を確認',
+                  onPressed: () async {
+                    try {
+                      await openRecipeAppUpdates();
+                    } catch (_) {}
+                  },
+                )
+              : null,
+        ),
       );
       return;
     }

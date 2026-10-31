@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:siwc_client/siwc_contract.dart';
 import 'package:recipe_cooking_navigator/application/recipe_ai_client.dart';
@@ -28,6 +29,7 @@ class _Client implements RecipeAiClient {
   bool enabled = true;
   String answer = '';
   String? sentInput;
+  void Function()? receivingCallback;
   Object? failure;
   int calls = 0;
   Completer<String>? pending;
@@ -62,9 +64,11 @@ class _Client implements RecipeAiClient {
     String model,
     String input, {
     required String instructions,
+    void Function()? onReceiving,
   }) async {
     calls++;
     sentInput = input;
+    receivingCallback = onReceiving;
     if (failure != null) throw failure!;
     return pending?.future ?? answer;
   }
@@ -173,6 +177,340 @@ void main() {
     flow.dispose();
     session.dispose();
   });
+
+  test(
+    'receive event is local single-shot and ignored after cancellation',
+    () async {
+      final firstResponse = Completer<String>();
+      client.pending = firstResponse;
+      final first = flow.generate(
+        request,
+        request.directText,
+        () async => prompt,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(flow.receivingAnswer, isFalse);
+      final lateEvent = client.receivingCallback!;
+      flow.cancel();
+      final secondResponse = Completer<String>();
+      client.pending = secondResponse;
+      final next = flow.generate(
+        request,
+        request.directText,
+        () async => prompt,
+      );
+      await Future<void>.delayed(Duration.zero);
+      lateEvent();
+      expect(flow.receivingAnswer, isFalse);
+      var notifications = 0;
+      void listener() => notifications++;
+      flow.addListener(listener);
+      client.receivingCallback!();
+      client.receivingCallback!();
+      expect(flow.receivingAnswer, isTrue);
+      expect(notifications, 1);
+      final stages = <RecipeCreationStage>[];
+      void collectStage() => stages.add(flow.stage);
+      flow.addListener(collectStage);
+      secondResponse.complete(source);
+      await next;
+      firstResponse.complete(source);
+      await first;
+      expect(stages, contains(RecipeCreationStage.validating));
+      expect(flow.stage, RecipeCreationStage.preview);
+      expect(client.calls, 2);
+      expect(store.docs, isEmpty);
+      flow.removeListener(listener);
+      flow.removeListener(collectStage);
+    },
+  );
+
+  testWidgets('waiting receiving and elapsed time use the existing inference', (
+    tester,
+  ) async {
+    client.pending = Completer<String>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AiRecipeRequestScreen(
+          library: library,
+          session: session,
+          prompt: prompt,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('ai_食材')), '豚肉');
+    await tester.tap(find.byKey(const Key('connected_ai_send')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('ChatGPTの回答を待っています'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.textContaining('経過 2秒'), findsOneWidget);
+    client.receivingCallback!();
+    await tester.pump();
+    expect(find.text('回答を受信中です'), findsOneWidget);
+    expect(find.text('ChatGPTの回答を待っています'), findsNothing);
+    expect(client.calls, 1);
+    client.pending!.complete(source);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('connected_ai_preview')), findsOneWidget);
+    expect(find.text('回答を受信中です'), findsNothing);
+    expect(client.calls, 1);
+  });
+
+  test('format repair sends the rejected answer once and keeps the planned version', () async {
+    client.answer = '材料を炒めれば完成です';
+    await flow.generate(request, request.directText, () async => prompt);
+    expect(client.calls, 1);
+    expect(flow.canRepair, isTrue);
+    expect(store.docs, isEmpty);
+    expect(session.rejectedRecipe!['source'], client.answer);
+    client.answer = source;
+    await flow.repair(() async => prompt);
+    expect(client.calls, 2);
+    final sent = jsonDecode(client.sentInput!) as Map;
+    expect((sent['repair'] as Map)['rejected_answer'], '材料を炒めれば完成です');
+    expect(sent['confirmed_request'], request.directText.trim());
+    expect(flow.preview!.revision, 1);
+    expect(flow.stage, RecipeCreationStage.preview);
+    expect(session.rejectedRecipe, isNull);
+    expect(store.docs, isEmpty);
+    await flow.save();
+    expect(store.docs, hasLength(1));
+  });
+
+  test('repair includes schema diagnostics and wrong requested servings stay unsaved', () async {
+    final invalid = jsonDecode(source) as Map<String, dynamic>;
+    (invalid['recipe'] as Map).remove('stages');
+    client.answer = jsonEncode(invalid);
+    await flow.generate(request, request.directText, () async => prompt);
+    expect(flow.rejectedProblem, contains('stages'));
+    final wrongServings = AiRecipeRequest.generate(
+      ingredients: '豚肉',
+      servings: 4,
+      utensils: '',
+      taste: '',
+      timeMinutes: 30,
+    );
+    client.answer = source;
+    await flow.generate(
+      wrongServings,
+      wrongServings.directText,
+      () async => prompt,
+    );
+    expect(flow.preview, isNull);
+    expect(store.docs, isEmpty);
+    expect(flow.canRepair, isTrue);
+  });
+
+  test(
+    'newer schema requests an app update and cannot be silently repaired',
+    () async {
+      for (final version in ['1.0.0', '2.1.0', '10.0.0']) {
+        final raw = jsonDecode(source) as Map<String, dynamic>;
+        raw['schema_version'] = version;
+        client.answer = jsonEncode(raw);
+        await flow.generate(request, request.directText, () async => prompt);
+        expect(flow.importIssue!.needsAppUpdate, version != '1.0.0');
+        expect(flow.canRepair, version == '1.0.0');
+        expect(flow.preview, isNull);
+        expect(store.docs, isEmpty);
+      }
+      final calls = client.calls;
+      await flow.repair(() async => prompt);
+      expect(client.calls, calls);
+    },
+  );
+
+  test('recreate a past version without evaluation preserves history active and progress', () async {
+    for (final revision in [2, 4]) {
+      final raw = jsonDecode(source) as Map<String, dynamic>;
+      final recipe = raw['recipe'] as Map;
+      recipe['revision'] = revision;
+      recipe['parent_revision'] = 1;
+      await library.importSource(jsonEncode(raw));
+    }
+    final base = library.recipes.single;
+    final second = library.revisionFor(base.id, 2)!;
+    await library.setActiveRevision(base.id, 2);
+    await library.cookingStore.startCooking(
+      second,
+      second.contextFor(second.servings),
+      second.steps.first['id'] as String,
+    );
+    final progress = jsonEncode(
+      (await library.cookingStore.read())['progress'],
+    );
+    final recreate = AiRecipeRequest.recreate(recipe: second, nextRevision: 5);
+    final raw = jsonDecode(source) as Map<String, dynamic>;
+    (raw['recipe'] as Map)['revision'] = 5;
+    (raw['recipe'] as Map)['parent_revision'] = 2;
+    client.answer = jsonEncode(raw);
+    await flow.generate(recreate, '手順を詳しくする', () async => prompt);
+    expect(jsonDecode(client.sentInput!)['selected_feedback'], isNull);
+    expect(
+      jsonDecode(client.sentInput!)['recreate_recipe']['next_revision'],
+      5,
+    );
+    expect(flow.preview!.revision, 5);
+    await flow.save();
+    expect(library.revisionsFor(base.id).map((r) => r.revision), [5, 4, 2]);
+    expect(library.activeRecipeFor(base.id)!.revision, 2);
+    expect(
+      jsonEncode((await library.cookingStore.read())['progress']),
+      progress,
+    );
+    expect(library.revisionFor(base.id, 5)!.parentRevision, 2);
+  });
+
+  test(
+    'rejected source and request survive app reconstruction without sending',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'recipe-rejected',
+      );
+      try {
+        final file = File('${directory.path}/state.json');
+        final firstSession = RecipeAiSession(client, RecipeCreationStore(file));
+        await firstSession.initialize();
+        final firstFlow = RecipeCreationController(firstSession, library);
+        client.answer = '{broken';
+        await firstFlow.generate(
+          request,
+          request.directText,
+          () async => prompt,
+        );
+        firstFlow.dispose();
+        firstSession.dispose();
+        final calls = client.calls;
+        final restored = RecipeAiSession(client, RecipeCreationStore(file));
+        await restored.initialize();
+        final restoredFlow = RecipeCreationController(restored, library)
+          ..restoreRejected();
+        expect(restoredFlow.rejectedSource, '{broken');
+        expect(restoredFlow.rejectedRequest!.conditions!['servings'], 2);
+        expect(restoredFlow.canRepair, isTrue);
+        expect(client.calls, calls);
+        restoredFlow.dispose();
+        restored.dispose();
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
+  testWidgets('restored external repair retains the public contract gate', (
+    tester,
+  ) async {
+    client.enabled = false;
+    await session.saveRejectedRecipe({
+      'source': '{broken',
+      'conditions': request.directText,
+      'request': request.toJson(),
+      'message': '形式不一致',
+      'code': 'malformedJson',
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AiRecipeRequestScreen(
+          library: library,
+          session: session,
+          publicReady: false,
+          prompt: prompt,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('connected_ai_send')))
+          .onPressed,
+      isNull,
+    );
+    expect(client.calls, 0);
+    expect(session.rejectedRecipe!['source'], '{broken');
+  });
+
+  testWidgets(
+    'app update revalidates a retained now-supported answer without inference',
+    (tester) async {
+      await session.saveRejectedRecipe({
+        'source': source,
+        'conditions': request.directText,
+        'request': request.toJson(),
+        'message': '以前のアプリでは未対応',
+        'code': 'unsupportedSchemaVersion',
+        'schema_version': '2.0.0',
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AiRecipeRequestScreen(
+            library: library,
+            session: session,
+            prompt: prompt,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('connected_ai_preview')), findsOneWidget);
+      expect(client.calls, 0);
+      expect(store.docs, isEmpty);
+      expect(session.rejectedRecipe, isNull);
+    },
+  );
+
+  testWidgets(
+    'newer recipe format shows update action inline and preserves the answer',
+    (tester) async {
+      final raw = jsonDecode(source) as Map<String, dynamic>;
+      raw['schema_version'] = '3.0.0';
+      client.answer = jsonEncode(raw);
+      final methods = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('recipe/ai-request'), (
+            call,
+          ) async {
+            methods.add(call.method);
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              const MethodChannel('recipe/ai-request'),
+              null,
+            ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AiRecipeRequestScreen(
+            library: library,
+            session: session,
+            prompt: prompt,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('ai_食材')), '豚肉');
+      await tester.tap(find.byKey(const Key('connected_ai_send')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('3.0.0'), findsWidgets);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('connected_ai_send')))
+            .onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('check_recipe_app_update')),
+      );
+      await tester.tap(find.byKey(const Key('check_recipe_app_update')));
+      await tester.pumpAndSettle();
+      expect(methods, ['openAppUpdates']);
+      expect(client.calls, 1);
+      expect(session.rejectedRecipe!['source'], client.answer);
+      expect(store.docs, isEmpty);
+    },
+  );
 
   test('cancelled attempt cannot overwrite a newer candidate and double generation sends once', () async {
     client.pending = Completer<String>();

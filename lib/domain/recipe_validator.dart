@@ -19,11 +19,29 @@ class RecipeImportException implements Exception {
     this.code,
     this.message, {
     this.details = const [],
+    this.receivedSchemaVersion,
   });
 
   final RecipeImportErrorCode code;
   final String message;
   final List<String> details;
+  final String? receivedSchemaVersion;
+  bool get needsAppUpdate {
+    final version = receivedSchemaVersion;
+    if (version == null ||
+        !RegExp(r'^\d{1,6}\.\d{1,6}\.\d{1,6}$').hasMatch(version)) {
+      return false;
+    }
+    final received = version.split('.').map(int.parse).toList();
+    final supported = supportedRecipeSchemaVersion
+        .split('.')
+        .map(int.parse)
+        .toList();
+    for (var i = 0; i < 3; i++) {
+      if (received[i] != supported[i]) return received[i] > supported[i];
+    }
+    return false;
+  }
 
   @override
   String toString() => message;
@@ -80,7 +98,8 @@ class RecipeValidator {
         RecipeImportErrorCode.unsupportedSchemaVersion,
         legacy
             ? '旧形式のレシピです。対応する新しい指示文でレシピを作り直してください。'
-            : 'このレシピの形式（$schemaVersion）には対応していません。',
+            : 'レシピ形式 $schemaVersion と、このアプリの対応形式 $supportedRecipeSchemaVersion が異なります。対応状況とアプリの更新を確認してください。',
+        receivedSchemaVersion: schemaVersion,
       );
     }
     final type = document['type'];

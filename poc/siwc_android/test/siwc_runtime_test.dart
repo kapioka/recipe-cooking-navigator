@@ -149,7 +149,11 @@ class FakeNetwork implements SiwcNetwork {
   }
 
   @override
-  Future<String> infer(String bearer, Map<String, dynamic> body) async {
+  Future<String> infer(
+    String bearer,
+    Map<String, dynamic> body, {
+    void Function()? onReceiving,
+  }) async {
     inferences++;
     if (inferFailure != null) throw inferFailure!;
     sent = body;

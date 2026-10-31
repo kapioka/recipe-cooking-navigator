@@ -189,12 +189,20 @@ Future<String> collectCompletedResponse(
   int maxStreamChars = 16 * 1024 * 1024,
   int maxTextChars = 1024 * 1024,
   void Function(int streamChars, int textChars)? onCompleted,
+  void Function()? onReceiving,
 }) async {
   final data = <String>[];
   final streamedText = StringBuffer();
   final doneText = <String>[];
   String? completedText;
   var received = 0;
+  var notifiedReceiving = false;
+  void notifyReceiving(String text) {
+    if (text.isEmpty || notifiedReceiving) return;
+    notifiedReceiving = true;
+    onReceiving?.call();
+  }
+
   var doneTextLength = 0;
   String finish() {
     onCompleted?.call(received, completedText!.length);
@@ -222,6 +230,7 @@ Future<String> collectCompletedResponse(
       if (delta is! String) throw const SiwcFailure('回答テキストのイベント形式が不正です。');
       checkTextLength(streamedText.length + delta.length);
       streamedText.write(delta);
+      notifyReceiving(delta);
     }
     if (type == 'response.output_text.done') {
       final text = event['text'];
@@ -229,6 +238,7 @@ Future<String> collectCompletedResponse(
       doneTextLength += text.length;
       checkTextLength(doneTextLength);
       doneText.add(text);
+      notifyReceiving(text);
     }
     if (type == 'error' ||
         type == 'response.failed' ||

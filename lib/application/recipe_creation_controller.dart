@@ -6,6 +6,7 @@ import 'package:siwc_client/siwc_contract.dart';
 import '../domain/ai_recipe_prompt.dart';
 import '../domain/ai_recipe_request.dart';
 import '../domain/ai_recipe_response_diagnostic.dart';
+import '../domain/recipe_validator.dart';
 import 'ai_recipe_import.dart';
 import 'recipe_ai_session.dart';
 import 'recipe_library_controller.dart';
@@ -32,6 +33,7 @@ class RecipeCreationController extends ChangeNotifier {
   String? conditionsSaveWarning;
   String get candidateConditionsDescription {
     final feedback = candidateRequest?.feedback;
+    final recreation = candidateRequest?.recreation;
     return [
       candidateModel == null
           ? '貼り付けた回答を形式検証して表示しています。生成元や送信完了はアプリでは確認できません。'
@@ -43,8 +45,88 @@ class RecipeCreationController extends ChangeNotifier {
             ? '共有用の依頼には、選択した調理後の評価も含めました。'
             : '選択した調理後の評価も一緒に送っています。',
       ],
+      if (recreation != null)
+        '作り直し元: Version ${(recreation['recipe_snapshot'] as Map)['recipe']['revision']}（調理評価なし）',
       candidateConditions ?? 'この回答の送信条件は記録されていません。',
     ].join('\n\n');
+  }
+
+  String? rejectedSource, rejectedConditions, rejectedProblem;
+  AiRecipeRequest? rejectedRequest;
+  RecipeImportException? importIssue;
+  bool get canRepair =>
+      rejectedSource != null &&
+      rejectedRequest != null &&
+      importIssue?.needsAppUpdate != true;
+
+  void restoreRejected() {
+    final data = session.rejectedRecipe;
+    if (data == null) return;
+    try {
+      rejectedSource = data['source'] as String;
+      rejectedConditions = data['conditions'] as String;
+      rejectedProblem = data['problem'] as String?;
+      rejectedRequest = AiRecipeRequest.fromJson(
+        Map<String, dynamic>.from(data['request'] as Map),
+      );
+      final code = data['code'] as String?;
+      importIssue = RecipeImportException(
+        RecipeImportErrorCode.values.firstWhere(
+          (c) => c.name == code,
+          orElse: () => RecipeImportErrorCode.schemaViolation,
+        ),
+        data['message'] as String,
+        receivedSchemaVersion: data['schema_version'] as String?,
+      );
+      message = '${importIssue!.message}\n前の回答を保持しています。自動送信はしていません。';
+    } catch (_) {
+      message = '前の回答を復元できませんでした。条件から作り直せます。';
+    }
+  }
+
+  Future<void> rejectAnswer(
+    AiRecipeRequest request,
+    String source,
+    String conditions,
+    RecipeImportPreparation prepared,
+  ) async {
+    rejectedSource = source.length <= 1024 * 1024 ? source : null;
+    rejectedConditions = conditions;
+    rejectedRequest = request;
+    importIssue = prepared.issue;
+    rejectedProblem = [prepared.message, ...?importIssue?.details].join('\n');
+    message = prepared.issue?.message ?? prepared.message;
+    diagnostic = prepared.errorCode == null
+        ? prepared.message
+        : describeAiRecipeFailure(source, prepared.errorCode!);
+    if (rejectedSource != null) {
+      await session.saveRejectedRecipe({
+        'source': source,
+        'conditions': conditions,
+        'request': request.toJson(),
+        'message': message,
+        'code': prepared.errorCode?.name,
+        'schema_version': importIssue?.receivedSchemaVersion,
+        'problem': rejectedProblem,
+      });
+    }
+  }
+
+  Future<void> repair(Future<AiRecipePrompt> Function() loadPrompt) async {
+    if (!canRepair || busy) return;
+    final request = rejectedRequest!.repairAnswer(
+      rejectedSource!,
+      rejectedProblem ?? message ?? '形式不一致',
+      rejectedConditions!,
+    );
+    await generate(request, rejectedConditions!, loadPrompt);
+  }
+
+  Future<void> clearRejected() async {
+    rejectedSource = rejectedConditions = rejectedProblem = null;
+    rejectedRequest = null;
+    importIssue = null;
+    await session.saveRejectedRecipe(null);
   }
 
   String? message;
@@ -53,6 +135,7 @@ class RecipeCreationController extends ChangeNotifier {
   int _attempt = 0;
   bool _disposed = false;
   int elapsedSeconds = 0;
+  bool receivingAnswer = false;
   Timer? _timer;
   bool get generating => [
     RecipeCreationStage.starting,
@@ -84,6 +167,7 @@ class RecipeCreationController extends ChangeNotifier {
     message = diagnostic = null;
     failureKind = null;
     elapsedSeconds = 0;
+    receivingAnswer = false;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       elapsedSeconds++;
       _changed();
@@ -99,6 +183,15 @@ class RecipeCreationController extends ChangeNotifier {
         model,
         submission.input,
         instructions: submission.instructions,
+        onReceiving: () {
+          if (!_current(id) ||
+              stage != RecipeCreationStage.generating ||
+              receivingAnswer) {
+            return;
+          }
+          receivingAnswer = true;
+          _changed();
+        },
       );
       if (!_current(id)) return;
       stage = RecipeCreationStage.validating;
@@ -116,12 +209,12 @@ class RecipeCreationController extends ChangeNotifier {
         return;
       }
       if (prepared.preview == null) {
-        message = '保存できる形式のレシピを受け取れませんでした。保存はしていません。';
-        diagnostic = prepared.errorCode == null
-            ? prepared.message
-            : describeAiRecipeFailure(source, prepared.errorCode!);
+        await rejectAnswer(request, source, conditions, prepared);
+        if (!_current(id)) return;
         stage = RecipeCreationStage.editing;
       } else {
+        await clearRejected();
+        if (!_current(id)) return;
         preview = prepared.preview;
         candidateRequest = request;
         candidateModel = model;

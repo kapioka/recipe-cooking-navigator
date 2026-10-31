@@ -640,7 +640,13 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('start_cooking')));
     await tester.pumpAndSettle();
+    if (find.byKey(const Key('begin_cooking_steps')).evaluate().isNotEmpty) {
+      await tester.tap(find.byKey(const Key('begin_cooking_steps')));
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.byKey(const Key('confirm_restart_cooking')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('begin_cooking_steps')));
     await tester.pumpAndSettle();
     progress = (await cookingStore.read())['progress'] as Map;
     expect((progress[recipeId] as Map)['revision'], 2);
@@ -1049,6 +1055,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('start_cooking')));
       await tester.pumpAndSettle();
+      if (find.byKey(const Key('begin_cooking_steps')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('begin_cooking_steps')));
+        await tester.pumpAndSettle();
+      }
       expect(find.byKey(const Key('cooking_servings')), findsOneWidget);
       expect(find.text('4人分で調理中'), findsOneWidget);
       expect(find.textContaining('サラダ油 小さじ1'), findsWidgets);
@@ -1281,6 +1291,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('start_cooking')));
     await tester.pumpAndSettle();
+    if (find.byKey(const Key('begin_cooking_steps')).evaluate().isNotEmpty) {
+      await tester.tap(find.byKey(const Key('begin_cooking_steps')));
+      await tester.pumpAndSettle();
+    }
     expect(find.text('画面操作の説明'), findsOneWidget);
     await tester.tap(find.text('調理画面へ戻る'));
     await tester.pumpAndSettle();
@@ -1503,6 +1517,62 @@ void main() {
     );
   });
 
+  testWidgets(
+    'preparation owns wake until back without replacing interrupted cooking',
+    (tester) async {
+      final store = CookingStore();
+      final library = RecipeLibraryController(
+        _MemoryRecipeDocumentStore([
+          jsonDecode(recipeSource) as Map<String, dynamic>,
+        ]),
+        _MemoryRecipeTagStore(),
+        RecipeValidator.fromSchemaString(schemaSource),
+        () async => null,
+        cookingStore: store,
+      );
+      await library.load();
+      final recipe = library.recipes.single;
+      await store.markHelpSeen();
+      await store.startCooking(
+        recipe,
+        recipe.contextFor(3),
+        recipe.steps[1]['id'] as String,
+      );
+      final previous = jsonEncode((await store.read())['progress']);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CookingEntry(
+              recipe: recipe,
+              controller: library,
+              cookingContext: recipe.contextFor(2),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      cookingCalls.clear();
+      await tester.tap(find.byKey(const Key('start_cooking')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm_restart_cooking')));
+      await tester.pumpAndSettle();
+      expect(find.text('下準備'), findsOneWidget);
+      expect(cookingCalls.map((c) => c.method), ['wake']);
+      expect(jsonEncode((await store.read())['progress']), previous);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(cookingCalls.last.method, 'close');
+      expect(jsonEncode((await store.read())['progress']), previous);
+      await tester.tap(find.byKey(const Key('resume_cooking')));
+      await tester.pumpAndSettle();
+      expect(find.text('下準備'), findsNothing);
+      expect(cookingCalls.last.method, 'wake');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(cookingCalls.last.method, 'close');
+    },
+  );
+
   testWidgets('uses persistent Kitchen timers for Recipe steps', (
     tester,
   ) async {
@@ -1554,6 +1624,10 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('start_cooking')));
     await tester.pumpAndSettle();
+    if (find.byKey(const Key('begin_cooking_steps')).evaluate().isNotEmpty) {
+      await tester.tap(find.byKey(const Key('begin_cooking_steps')));
+      await tester.pumpAndSettle();
+    }
     expect(find.byType(CookingScreen), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('timer_button')));
